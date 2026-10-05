@@ -137,6 +137,9 @@ object PluginCrypto {
     }
 
     private fun keyForV2(): SecretKey {
+        check(BuildConfig.ENABLE_ENCRYPTED_PLUGINS) {
+            "当前 debug/CI 测试构建未包含正式签名密钥，v2 加密插件功能已禁用"
+        }
         val ctx = appContext ?: error("PluginCrypto.init(context) 未调用")
         return deriveKey(ctx)
     }

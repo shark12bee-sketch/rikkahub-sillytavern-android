@@ -203,6 +203,18 @@ internal fun createForkConversation(
     folderId = source.folderId,
 )
 
+internal fun truncateConversationAtMessageForRegeneration(
+    conversation: Conversation,
+    message: UIMessage,
+): Conversation {
+    val node = conversation.getMessageNodeByMessage(message)
+    val indexAt = conversation.messageNodes.indexOf(node)
+    check(indexAt >= 0) { "Cannot regenerate a message which is not in the conversation" }
+    return conversation.copy(
+        messageNodes = conversation.messageNodes.subList(0, indexAt + 1),
+    )
+}
+
 data class ChatError(
     val id: Uuid = Uuid.random(),
     val title: String? = null,
@@ -1033,12 +1045,8 @@ class ChatService(
 
                 if (message.role == MessageRole.USER) {
                     // 如果是用户消息，则截止到当前消息
-                    val node = conversation.getMessageNodeByMessage(message)
-                    val indexAt = conversation.messageNodes.indexOf(node)
-                    val newConversation = conversation.copy(
-                        messageNodes = conversation.messageNodes.subList(0, indexAt + 1)
-                    )
-                    saveConversation(conversationId, newConversation)
+                    val newConversation = truncateConversationAtMessageForRegeneration(conversation, message)
+                    saveConversation(conversationId, newConversation, allowShrink = true)
                     handleMessageComplete(conversationId, generationType = GenerationType.REGENERATE)
                 } else {
                     if (regenerateAssistantMsg) {

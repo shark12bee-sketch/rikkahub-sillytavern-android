@@ -10,6 +10,19 @@ val enableFirebase = providers.gradleProperty("rikkahub.enableFirebase")
     .map { it.equals("true", ignoreCase = true) }
     .getOrElse(false)
 
+// 个人 fork 的 CI debug 包没有正式签名 secret，因而无法通过正式插件 KDF 校验。
+// 这个开关只有在明确请求 debug、且没有同时请求 release 任务时才允许启用。
+val disableEncryptedPluginsForDebug = providers
+    .gradleProperty("huadeng.disableEncryptedPluginsForDebug")
+    .map { it.equals("true", ignoreCase = true) }
+    .getOrElse(false)
+val requestedGradleTasks = gradle.startParameter.taskNames
+val isDebugOnlyInvocation = requestedGradleTasks.any { it.contains("debug", ignoreCase = true) } &&
+    requestedGradleTasks.none { it.contains("release", ignoreCase = true) }
+check(!disableEncryptedPluginsForDebug || isDebugOnlyInvocation) {
+    "huadeng.disableEncryptedPluginsForDebug 只能用于仅包含 debug 任务的测试构建。"
+}
+
 /**
  * libhdguard.so 内置的派生因子。
  *
@@ -217,15 +230,24 @@ android {
         // 配合公开的签名证书即可完整复现密钥派生、解开插件载荷。
         // 因子现由 libhdguard.so 在运行时供给（见 app/src/main/cpp/hdguard.c），
         // 上面算出的 kdfFactor 仍用于校验 native 侧数据的一致性，但不进入 APK。
-        check(kdfFactor == HD_GUARD_EXPECTED_FACTOR) {
-            "[华灯] 签名口令推导出的因子与 libhdguard.so 内置值不一致。" +
-                "两者必须相同，否则 APK 无法解密 v2 插件。" +
-                "请重新生成 hdguard.c 中的 BLOB，或检查 local.properties 的签名口令。"
+        if (disableEncryptedPluginsForDebug) {
+            logger.warn("[华灯] 当前为无正式签名的 debug/CI 测试构建，v2 加密插件功能已禁用。")
+        } else {
+            check(kdfFactor == HD_GUARD_EXPECTED_FACTOR) {
+                "[华灯] 签名口令推导出的因子与 libhdguard.so 内置值不一致。" +
+                    "两者必须相同，否则 APK 无法解密 v2 插件。" +
+                    "请重新生成 hdguard.c 中的 BLOB，或检查 local.properties 的签名口令。"
+            }
         }
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
         buildConfigField("boolean", "ENABLE_FIREBASE", enableFirebase.toString())
+        buildConfigField(
+            "boolean",
+            "ENABLE_ENCRYPTED_PLUGINS",
+            (!disableEncryptedPluginsForDebug).toString(),
+        )
 
         ndk {
             // 只出 arm64-v8a 单一 APK（Chaquopy 要求 ndk.abiFilters，故不再用 splits abi）
