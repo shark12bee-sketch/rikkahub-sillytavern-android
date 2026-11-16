@@ -49,7 +49,7 @@ internal data class LorebookBatchPreview(
     val mode: LorebookBatchMode,
     val entries: List<PromptInjection.RegexInjection>,
 ) {
-    val group: String get() = entries.map { it.group }.distinct().singleOrNull().orEmpty()
+    val group: String get() = entries.map { it.group.ifBlank { "" } }.distinct().singleOrNull().orEmpty()
 }
 
 /** ICU character boundaries preserve emoji sequences and combining marks, not just UTF-16 units. */

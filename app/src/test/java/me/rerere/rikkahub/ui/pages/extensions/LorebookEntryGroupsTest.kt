@@ -9,6 +9,18 @@ import org.junit.Test
 import kotlin.uuid.Uuid
 
 class LorebookEntryGroupsTest {
+    @Test fun `legacy whitespace groups remain ungrouped without rewriting existing fields`() {
+        val whitespace = PromptInjection.RegexInjection(name = "space", group = "  ", content = "preserve")
+        val plain = whitespace.copy(id = Uuid.random(), name = "plain", group = "")
+        val fresh = whitespace.copy(id = Uuid.random(), name = "fresh", group = "")
+        val original = listOf(whitespace, plain)
+        val inserted = insertLorebookEntry(original, fresh, LorebookEntryPlacement.groupEdge("", false))
+        assertEquals(listOf(fresh, whitespace, plain), inserted)
+        assertEquals("  ", inserted[1].group)
+        val reordered = moveLorebookEntry(original, whitespace.id, plain.id)
+        assertEquals(listOf(plain, whitespace), reordered)
+        assertEquals(original.associateBy { it.id }, reordered.associateBy { it.id })
+    }
     private val entries = List(5) {
         PromptInjection.RegexInjection(name = "entry $it", content = "full $it", group = if (it % 2 == 0) "A" else "B",
             keywords = listOf("key$it"), enabled = false, priority = 77, injectDepth = 9, probability = 31,

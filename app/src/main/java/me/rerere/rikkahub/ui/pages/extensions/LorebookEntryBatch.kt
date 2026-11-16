@@ -37,7 +37,7 @@ internal fun insertLorebookBatch(
     atEnd: Boolean?,
 ): List<PromptInjection.RegexInjection> {
     require(selected.isNotEmpty()) { "没有可插入的条目，请重新选择" }
-    val groups = selected.map { it.group }.distinct()
+    val groups = selected.map { it.group.ifBlank { "" } }.distinct()
     val destination = placement?.group
     require(destination != null || groups.size == 1) { "跨组操作请明确选择目标分组" }
     val inserted = if (destination == null) selected else selected.map { if (it.group == destination) it else it.copy(group = destination) }
@@ -50,16 +50,16 @@ internal fun insertLorebookBatch(
             val group = destination ?: groups.single()
             if (placement.targetId == null) {
                 require(destination != null) { "请选择目标分组" }
-                val matching = remaining.indices.filter { remaining[it].group == group }
+                val matching = remaining.indices.filter { remaining[it].group.ifBlank { "" } == group.ifBlank { "" } }
                 if (matching.isEmpty()) remaining.size else if (placement.after) matching.last() + 1 else matching.first()
             } else {
-            val target = remaining.indexOfFirst { it.id == placement.targetId && it.group == group }
+            val target = remaining.indexOfFirst { it.id == placement.targetId && it.group.ifBlank { "" } == group.ifBlank { "" } }
             require(target >= 0) { "插入目标已改变或不属于同一分组，请重新选择落点" }
             target + if (placement.after) 1 else 0
             }
         }
         else -> {
-            require(remaining.none { it.group == groups.single() }) { "请先选择插入位置" }
+            require(remaining.none { it.group.ifBlank { "" } == groups.single() }) { "请先选择插入位置" }
             remaining.size
         }
     }

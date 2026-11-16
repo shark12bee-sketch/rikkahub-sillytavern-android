@@ -24,7 +24,7 @@ internal fun LorebookGroupTargetSelector(groups: List<String>, selected: String,
             }
         }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-            (groups + selected + "").distinct().forEach { group ->
+            (groups + selected + "").map { it.ifBlank { "" } }.distinct().forEach { group ->
                 DropdownMenuItem(text = { Text("组内：${groupLabel(group)}") },
                     onClick = { expanded = false; onSelect(group) })
             }
