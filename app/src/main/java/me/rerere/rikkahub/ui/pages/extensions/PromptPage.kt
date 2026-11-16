@@ -50,6 +50,8 @@ import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.Button
@@ -76,6 +78,7 @@ import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -241,6 +244,7 @@ fun PromptPage(vm: PromptVM = koinViewModel()) {
                             vm.updateSettings { latest -> latest.copy(lorebooks = newLorebooks) }
                         },
                         settings = settings,
+                        onCommitBatch = vm::commitLorebookBatch,
                         onSettingsUpdate = { fn -> vm.updateSettings(fn) }
                     )
                 }
@@ -688,6 +692,7 @@ private fun LorebookTab(
     onUpdate: (List<Lorebook>) -> Unit,
     settings: Settings,
     onSettingsUpdate: ((Settings) -> Settings) -> Unit,
+    onCommitBatch: suspend (LorebookBatchRequest) -> Lorebook,
 ) {
     var expanded by rememberSaveable { mutableStateOf(true) }
     val lazyListState = rememberLazyListState()
@@ -1206,6 +1211,8 @@ private fun LorebookTab(
                 onDismiss = { editState.dismiss() },
                 onConfirm = { editState.confirm() },
                 onSave = ::saveLorebook,
+                persistedBook = currentLorebooks.firstOrNull { it.id == state.id },
+                onCommitBatch = onCommitBatch,
                 onEdit = { editState.currentState = it }
             )
         }
@@ -1330,11 +1337,13 @@ private fun LorebookCard(
 }
 
 @Composable
-private fun LorebookEditSheet(
+internal fun LorebookEditSheet(
     book: Lorebook,
     onDismiss: () -> Unit,
     onConfirm: () -> Unit,
     onSave: (Lorebook) -> Unit,
+    persistedBook: Lorebook?,
+    onCommitBatch: suspend (LorebookBatchRequest) -> Lorebook,
     onEdit: (Lorebook) -> Unit
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -1345,6 +1354,53 @@ private fun LorebookEditSheet(
             JsonInstant.decodeFromString<PromptInjection.RegexInjection>(it)
         }
     }
+    var selecting by rememberSaveable(book.id.toString()) { mutableStateOf(false) }
+    var selectedStrings by rememberSaveable(book.id.toString()) { mutableStateOf(emptyList<String>()) }
+    var movingStrings by rememberSaveable(book.id.toString()) { mutableStateOf(emptyList<String>()) }
+    var batchToken by remember { mutableStateOf(Uuid.random()) }
+    var menuExpanded by remember { mutableStateOf(false) }
+    var savingBatch by remember { mutableStateOf(false) }
+    var batchError by remember { mutableStateOf<String?>(null) }
+    var baselineJson by rememberSaveable(book.id.toString()) {
+        mutableStateOf(persistedBook?.let { JsonInstant.encodeToString(it) })
+    }
+    val baseline = remember(baselineJson) { baselineJson?.let { JsonInstant.decodeFromString<Lorebook>(it) } }
+    val selectedIds = selectedStrings.map { Uuid.parse(it) }.toSet()
+    val movingIds = movingStrings.map { Uuid.parse(it) }.toSet()
+    val moving = movingIds.takeIf { it.isNotEmpty() }?.let {
+        LorebookBatchPreview(batchToken, LorebookBatchMode.MOVE, orderedLorebookSelection(book.entries, it))
+    }
+    LaunchedEffect(persistedBook, book) {
+        if (persistedBook == book) baselineJson = JsonInstant.encodeToString(book)
+    }
+    fun cancelBatch() {
+        if (!savingBatch) {
+            selecting = false
+            selectedStrings = emptyList()
+            movingStrings = emptyList()
+            batchError = null
+        }
+    }
+    fun commitBatch(placement: LorebookEntryPlacement?, atEnd: Boolean?) {
+        if (savingBatch) return
+        savingBatch = true
+        batchError = null
+        scope.launch {
+            try {
+                val saved = onCommitBatch(LorebookBatchRequest(book, baseline, LorebookBatchAction.Move(movingIds), placement, atEnd))
+                onEdit(saved)
+                baselineJson = JsonInstant.encodeToString(saved)
+                movingStrings = emptyList()
+            } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                throw cancelled
+            } catch (failure: Exception) {
+                batchError = "保存失败：${failure.message ?: "请重试"}；暂存条目仍保留"
+            } finally {
+                savingBatch = false
+            }
+        }
+    }
+    val dismiss = { if (!savingBatch) onDismiss() }
     val entryEditState = useEditState<PromptInjection.RegexInjection> { edited ->
         val index = book.entries.indexOfFirst { it.id == edited.id }
         if (index >= 0) {
@@ -1388,14 +1444,14 @@ private fun LorebookEditSheet(
     }
 
     ModalBottomSheet(
-        onDismissRequest = onDismiss,
+        onDismissRequest = dismiss,
         sheetState = sheetState,
         sheetGesturesEnabled = false,
         dragHandle = {
             IconButton(onClick = {
                 scope.launch {
                     sheetState.hide()
-                    onDismiss()
+                    dismiss()
                 }
             }) {
                 Icon(HugeIcons.ArrowDown01, null)
@@ -1415,11 +1471,42 @@ private fun LorebookEditSheet(
                 modifier = Modifier.align(Alignment.CenterHorizontally)
             )
 
+            Box(Modifier.fillMaxWidth()) {
+                TextButton(onClick = { menuExpanded = true }, enabled = pendingEntry == null && moving == null && !selecting && !savingBatch) {
+                    Text("批量管理条目")
+                }
+                DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
+                    DropdownMenuItem(text = { Text("移动到本书其他位置") }, onClick = { menuExpanded = false; selecting = true })
+                    DropdownMenuItem(text = { Text("复制到其他世界书") }, enabled = false, onClick = {})
+                }
+            }
+            if (selecting) LorebookSelectionControls(
+                book.entries, selectedIds, LorebookBatchMode.MOVE,
+                onSelect = { selectedStrings = it.map(Uuid::toString) },
+                onDone = {
+                    movingStrings = orderedLorebookSelection(book.entries, selectedIds).map { it.id.toString() }
+                    batchToken = Uuid.random()
+                    selectedStrings = emptyList()
+                    selecting = false
+                },
+                onCancel = ::cancelBatch,
+            )
+            if (savingBatch) Text("正在保存，请稍候…", style = MaterialTheme.typography.bodySmall)
+            batchError?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
+
             LorebookEntryList(
                 book = book,
                 pendingEntry = pendingEntry,
+                batch = moving,
+                selectedIds = if (selecting) selectedIds else null,
+                onSelectEntry = { id ->
+                    selectedStrings = (if (id in selectedIds) selectedIds - id else selectedIds + id).map(Uuid::toString)
+                },
+                onRemoveBatchEntry = { id -> if (!savingBatch) movingStrings = movingStrings - id.toString() },
+                onCommitBatch = ::commitBatch,
+                batchEnabled = !savingBatch,
                 onUpdatePending = { pendingEntryJson = JsonInstant.encodeToString(it) },
-                onCancelPending = { pendingEntryJson = null },
+                onCancelPending = { if (moving != null) cancelBatch() else pendingEntryJson = null },
                 onInsertPendingAtEdge = { atEnd ->
                     pendingEntry?.let { pending ->
                         val inserted = book.copy(entries = insertLorebookEntryAtEdge(book.entries, pending, atEnd))
@@ -1464,8 +1551,8 @@ private fun LorebookEditSheet(
                     )
 
                 },
-                onEntriesChange = { onEdit(book.copy(entries = it)) },
-                onEditEntry = { entryEditState.open(it) },
+                onEntriesChange = { if (!savingBatch) onEdit(book.copy(entries = it)) },
+                onEditEntry = { if (!savingBatch) entryEditState.open(it) },
                 onAddEntry = { group -> entryEditState.open(PromptInjection.RegexInjection(group = group)) },
                 onGroupSettings = { group, entries -> groupEditState.open(group to entries) },
             )
@@ -1474,10 +1561,10 @@ private fun LorebookEditSheet(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)
             ) {
-                TextButton(onClick = onDismiss) {
+                TextButton(onClick = dismiss, enabled = !savingBatch) {
                     Text(stringResource(R.string.prompt_page_cancel))
                 }
-                Button(onClick = onConfirm, enabled = pendingEntry == null) {
+                Button(onClick = onConfirm, enabled = pendingEntry == null && moving == null && !selecting && !savingBatch) {
                     Text(stringResource(R.string.prompt_page_confirm))
                 }
             }
@@ -1553,6 +1640,7 @@ internal fun RegexInjectionEntryCard(
     entry: PromptInjection.RegexInjection,
     collapsed: Boolean = false,
     dragHandle: @Composable () -> Unit = {},
+    selection: @Composable () -> Unit = {},
     onEdit: () -> Unit,
     onDelete: () -> Unit,
     onUpdate: (PromptInjection.RegexInjection) -> Unit = {},
@@ -1572,6 +1660,7 @@ internal fun RegexInjectionEntryCard(
         Row(modifier = Modifier.fillMaxWidth().drawBehind {
             drawRect(stripeColor, size = Size(4.dp.toPx(), size.height))
         }) {
+            selection()
             Column(
                 modifier = Modifier
                     .weight(1f)
