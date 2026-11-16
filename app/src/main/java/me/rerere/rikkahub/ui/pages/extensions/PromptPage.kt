@@ -247,6 +247,7 @@ fun PromptPage(vm: PromptVM = koinViewModel()) {
                         },
                         settings = settings,
                         onCommitBatch = vm::commitLorebookBatch,
+                        copyState = vm.lorebookCopies,
                         onSettingsUpdate = { fn -> vm.updateSettings(fn) }
                     )
                 }
@@ -695,7 +696,10 @@ private fun LorebookTab(
     settings: Settings,
     onSettingsUpdate: ((Settings) -> Settings) -> Unit,
     onCommitBatch: suspend (LorebookBatchRequest) -> Lorebook,
+    copyState: LorebookCopyState,
 ) {
+    val pendingCopy by copyState.pending.collectAsStateWithLifecycle()
+    val copyBusy by copyState.busy.collectAsStateWithLifecycle()
     var expanded by rememberSaveable { mutableStateOf(true) }
     val lazyListState = rememberLazyListState()
     val toaster = LocalToaster.current
@@ -777,6 +781,9 @@ private fun LorebookTab(
                 .padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 8.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
+            if (!editState.isEditing) pendingCopy?.let { task ->
+                LorebookCopyShelf(task, copyBusy, copyState::remove, copyState::cancel)
+            }
             TextButton(
                 onClick = { worldInfoSettingsExpanded = !worldInfoSettingsExpanded },
             ) {
@@ -1215,6 +1222,14 @@ private fun LorebookTab(
                 onSave = ::saveLorebook,
                 persistedBook = currentLorebooks.firstOrNull { it.id == state.id },
                 onCommitBatch = onCommitBatch,
+                copyTask = pendingCopy,
+                copyBusy = copyBusy,
+                onStageCopy = { entries ->
+                    copyState.stage(state.id, entries)
+                    editState.dismiss()
+                },
+                onRemoveCopyEntry = copyState::remove,
+                onCancelCopy = copyState::cancel,
                 onEdit = { editState.currentState = it }
             )
         }
@@ -1346,6 +1361,11 @@ internal fun LorebookEditSheet(
     onSave: (Lorebook) -> Unit,
     persistedBook: Lorebook?,
     onCommitBatch: suspend (LorebookBatchRequest) -> Lorebook,
+    copyTask: LorebookCopyTask? = null,
+    copyBusy: Boolean = false,
+    onStageCopy: ((List<PromptInjection.RegexInjection>) -> Unit)? = null,
+    onRemoveCopyEntry: (Uuid) -> Unit = {},
+    onCancelCopy: () -> Unit = {},
     onEdit: (Lorebook) -> Unit
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -1357,6 +1377,8 @@ internal fun LorebookEditSheet(
         }
     }
     var selecting by rememberSaveable(book.id.toString()) { mutableStateOf(false) }
+    var selectionMode by rememberSaveable(book.id.toString()) { mutableStateOf(LorebookBatchMode.MOVE.name) }
+    var copyConfirmation by remember { mutableStateOf<LorebookBatchRequest?>(null) }
     var selectedStrings by rememberSaveable(book.id.toString()) { mutableStateOf(emptyList<String>()) }
     var movingStrings by rememberSaveable(book.id.toString()) { mutableStateOf(emptyList<String>()) }
     var batchToken by remember { mutableStateOf(Uuid.random()) }
@@ -1372,6 +1394,9 @@ internal fun LorebookEditSheet(
     val moving = movingIds.takeIf { it.isNotEmpty() }?.let {
         LorebookBatchPreview(batchToken, LorebookBatchMode.MOVE, orderedLorebookSelection(book.entries, it))
     }
+    val activeBatch = copyTask?.preview() ?: moving
+    val canCopyHere = copyTask == null || copyTask.sourceBookId != book.id
+    LaunchedEffect(copyTask?.id) { copyConfirmation = null; batchError = null }
     LaunchedEffect(persistedBook, book) {
         if (persistedBook == book) baselineJson = JsonInstant.encodeToString(book)
     }
@@ -1383,13 +1408,13 @@ internal fun LorebookEditSheet(
             batchError = null
         }
     }
-    fun commitBatch(placement: LorebookEntryPlacement?, atEnd: Boolean?) {
+    fun executeBatch(request: LorebookBatchRequest) {
         if (savingBatch) return
         savingBatch = true
         batchError = null
         scope.launch {
             try {
-                val saved = onCommitBatch(LorebookBatchRequest(book, baseline, LorebookBatchAction.Move(movingIds), placement, atEnd))
+                val saved = onCommitBatch(request)
                 onEdit(saved)
                 baselineJson = JsonInstant.encodeToString(saved)
                 movingStrings = emptyList()
@@ -1402,7 +1427,16 @@ internal fun LorebookEditSheet(
             }
         }
     }
-    val dismiss = { if (!savingBatch) onDismiss() }
+    fun commitBatch(placement: LorebookEntryPlacement?, atEnd: Boolean?) {
+        if (savingBatch || copyBusy) return
+        val action = copyTask?.let { LorebookBatchAction.Copy(it) } ?: LorebookBatchAction.Move(movingIds)
+        val request = LorebookBatchRequest(book, baseline, action, placement, atEnd)
+        if (action is LorebookBatchAction.Copy) {
+            if (canCopyHere) copyConfirmation = request
+            else batchError = "请选择另一份世界书作为复制目标；待复制选择仍保留"
+        } else executeBatch(request)
+    }
+    val dismiss = { if (!savingBatch && !copyBusy) onDismiss() }
     val entryEditState = useEditState<PromptInjection.RegexInjection> { edited ->
         val index = book.entries.indexOfFirst { it.id == edited.id }
         if (index >= 0) {
@@ -1450,7 +1484,7 @@ internal fun LorebookEditSheet(
         sheetState = sheetState,
         sheetGesturesEnabled = false,
         dragHandle = {
-            IconButton(onClick = {
+            IconButton(enabled = !savingBatch && !copyBusy, onClick = {
                 scope.launch {
                     sheetState.hide()
                     dismiss()
@@ -1474,24 +1508,40 @@ internal fun LorebookEditSheet(
             )
 
             Box(Modifier.fillMaxWidth()) {
-                TextButton(onClick = { menuExpanded = true }, enabled = pendingEntry == null && moving == null && !selecting && !savingBatch) {
+                TextButton(onClick = { menuExpanded = true }, enabled = pendingEntry == null && activeBatch == null && !selecting && !savingBatch && !copyBusy) {
                     Text("批量管理条目")
                 }
                 DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
-                    DropdownMenuItem(text = { Text("移动到本书其他位置") }, onClick = { menuExpanded = false; selecting = true })
-                    DropdownMenuItem(text = { Text("复制到其他世界书") }, enabled = false, onClick = {})
+                    DropdownMenuItem(text = { Text("移动到本书其他位置") }, onClick = { menuExpanded = false; selectionMode = LorebookBatchMode.MOVE.name; selecting = true })
+                    DropdownMenuItem(
+                        text = { Text("复制到其他世界书") },
+                        enabled = persistedBook != null && onStageCopy != null,
+                        onClick = { menuExpanded = false; selectionMode = LorebookBatchMode.COPY.name; selecting = true },
+                        trailingIcon = { if (persistedBook == null) Text("请先保存本书", style = MaterialTheme.typography.labelSmall) },
+                    )
                 }
             }
             if (selecting) LorebookSelectionControls(
-                book.entries, selectedIds, LorebookBatchMode.MOVE,
+                book.entries, selectedIds, LorebookBatchMode.valueOf(selectionMode),
                 onSelect = { selectedStrings = it.map(Uuid::toString) },
                 onDone = {
-                    movingStrings = orderedLorebookSelection(book.entries, selectedIds).map { it.id.toString() }
-                    batchToken = Uuid.random()
-                    selectedStrings = emptyList()
-                    selecting = false
+                    val ordered = orderedLorebookSelection(book.entries, selectedIds)
+                    try {
+                        if (selectionMode == LorebookBatchMode.COPY.name) checkNotNull(onStageCopy).invoke(ordered)
+                        else {
+                            movingStrings = ordered.map { it.id.toString() }
+                            batchToken = Uuid.random()
+                        }
+                        selectedStrings = emptyList()
+                        selecting = false
+                    } catch (failure: Exception) {
+                        batchError = failure.message ?: "暂存失败，请重试"
+                    }
                 },
                 onCancel = ::cancelBatch,
+            )
+            if (pendingEntry != null || activeBatch != null) Text(
+                "请先完成或取消当前待插入任务，再开始新任务", style = MaterialTheme.typography.bodySmall,
             )
             if (savingBatch) Text("正在保存，请稍候…", style = MaterialTheme.typography.bodySmall)
             batchError?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
@@ -1499,16 +1549,32 @@ internal fun LorebookEditSheet(
             LorebookEntryList(
                 book = book,
                 pendingEntry = pendingEntry,
-                batch = moving,
+                batch = activeBatch,
                 selectedIds = if (selecting) selectedIds else null,
                 onSelectEntry = { id ->
                     selectedStrings = (if (id in selectedIds) selectedIds - id else selectedIds + id).map(Uuid::toString)
                 },
-                onRemoveBatchEntry = { id -> if (!savingBatch) movingStrings = movingStrings - id.toString() },
+                onRemoveBatchEntry = { id ->
+                    if (!savingBatch && !copyBusy) {
+                        if (copyTask != null) onRemoveCopyEntry(id)
+                        else {
+                            movingStrings = movingStrings - id.toString()
+                            if (movingStrings.isEmpty()) batchError = null
+                        }
+                    }
+                },
                 onCommitBatch = ::commitBatch,
-                batchEnabled = !savingBatch,
+                batchEnabled = !savingBatch && !copyBusy && canCopyHere,
+                batchBusy = savingBatch || copyBusy,
+                batchHint = if (copyTask != null) {
+                    if (canCopyHere) "长按整组手柄选择落点；复制前会确认分组与位置"
+                    else "这是来源世界书，请返回列表选择另一份；暂存选择会保留"
+                } else null,
                 onUpdatePending = { pendingEntryJson = JsonInstant.encodeToString(it) },
-                onCancelPending = { if (moving != null) cancelBatch() else pendingEntryJson = null },
+                onCancelPending = {
+                    if (copyTask != null) { onCancelCopy(); batchError = null }
+                    else if (moving != null) cancelBatch() else pendingEntryJson = null
+                },
                 onInsertPendingAtEdge = { atEnd ->
                     pendingEntry?.let { pending ->
                         val inserted = book.copy(entries = insertLorebookEntryAtEdge(book.entries, pending, atEnd))
@@ -1563,14 +1629,28 @@ internal fun LorebookEditSheet(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)
             ) {
-                TextButton(onClick = dismiss, enabled = !savingBatch) {
+                TextButton(onClick = dismiss, enabled = !savingBatch && !copyBusy) {
                     Text(stringResource(R.string.prompt_page_cancel))
                 }
-                Button(onClick = onConfirm, enabled = pendingEntry == null && moving == null && !selecting && !savingBatch) {
+                Button(onClick = onConfirm, enabled = pendingEntry == null && activeBatch == null && !selecting && !savingBatch && !copyBusy) {
                     Text(stringResource(R.string.prompt_page_confirm))
                 }
             }
         }
+    }
+
+    copyConfirmation?.let { request ->
+        AlertDialog(
+            onDismissRequest = { copyConfirmation = null },
+            title = { Text("确认跨书复制") },
+            text = { Text(lorebookCopyConfirmation(request)) },
+            confirmButton = {
+                TextButton(onClick = { copyConfirmation = null; executeBatch(request) }) { Text("确认复制") }
+            },
+            dismissButton = {
+                TextButton(onClick = { copyConfirmation = null }) { Text("返回选择落点") }
+            },
+        )
     }
 
     if (entryEditState.isEditing) {
