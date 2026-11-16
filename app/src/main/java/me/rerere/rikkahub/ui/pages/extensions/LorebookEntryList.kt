@@ -39,6 +39,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalViewConfiguration
 import androidx.compose.ui.platform.ViewConfiguration
@@ -67,6 +68,7 @@ internal fun LorebookEntryList(
     onSelectEntry: (Uuid) -> Unit = {},
     onRemoveBatchEntry: (Uuid) -> Unit = {},
     onCommitBatch: (LorebookEntryPlacement?, Boolean?) -> Unit = { _, _ -> },
+    onCommitSingle: (Uuid, LorebookEntryPlacement) -> Unit = { _, _ -> },
     batchEnabled: Boolean = true,
     batchBusy: Boolean = false,
     batchHint: String? = null,
@@ -143,7 +145,8 @@ internal fun LorebookEntryList(
         }
     }
 
-    BoxWithConstraints(modifier = modifier) {
+    var rootOrigin by remember { mutableStateOf(Offset.Zero) }
+    BoxWithConstraints(modifier = modifier.onGloballyPositioned { rootOrigin = it.positionInRoot() }) {
         val safetyHeightLimit = maxHeight * 0.55f
         Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(if (batch != null) 4.dp else 8.dp)) {
             // Reserve at least 45% for the independent list, even with large text or an expanded editor.
@@ -155,6 +158,7 @@ internal fun LorebookEntryList(
                     title = if (batch != null) "${batch.mode.label} · 已选 ${batch.entries.size} 条"
                         else "待插入 · ${pendingEntry?.group?.ifBlank { "未分组" }}",
                     onConfirm = { if (batch != null) onCommitBatch(it, null) else onInsertPending(it) },
+                    onConfirmSingle = onCommitSingle,
                     longPressDrag = batch != null,
                     compact = batch != null,
                     enabled = batchEnabled,
@@ -163,8 +167,8 @@ internal fun LorebookEntryList(
                         else "安全区：拖动手柄选择同组位置；快捷插入首尾会立即保存",
                     onCancel = onCancelPending,
                     onInsertAtEdge = { if (batch != null) onCommitBatch(null, it) else onInsertPendingAtEdge(it) },
-                ) { handleModifier ->
-                    if (batch != null) LorebookBatchPreviewContent(batch, handleModifier, onRemoveBatchEntry, !batchBusy)
+                ) { handleModifier, thumbnailHandle ->
+                    if (batch != null) LorebookBatchPreviewContent(batch, handleModifier, onRemoveBatchEntry, !batchBusy, insertion, thumbnailHandle)
                     else if (pendingEntry != null) NewLorebookEntryPreview(
                         entry = pendingEntry,
                         handleModifier = handleModifier,
@@ -279,6 +283,7 @@ internal fun LorebookEntryList(
                 }
             }
         }
+        if (batch != null) LorebookBatchDragOverlay(insertion, batch, rootOrigin)
     }
 }
 

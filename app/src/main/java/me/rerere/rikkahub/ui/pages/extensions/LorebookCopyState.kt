@@ -40,15 +40,23 @@ internal class LorebookCopyState {
         if (!mutableBusy.value) mutablePending.value = null
     }
 
-    suspend fun <T> commit(task: LorebookCopyTask, write: suspend () -> T): T {
+    suspend fun <T> commit(
+        task: LorebookCopyTask,
+        ids: Set<Uuid> = task.entries.map { it.id }.toSet(),
+        write: suspend () -> T,
+    ): T {
         synchronized(lock) {
             check(!mutableBusy.value) { "复制正在保存，请稍候" }
             check(mutablePending.value == task) { "待复制选择已改变，请重新选择落点" }
+            require(ids.isNotEmpty() && task.entries.map { it.id }.containsAll(ids)) { "请选择有效条目" }
             mutableBusy.value = true
         }
         try {
             val result = write()
-            synchronized(lock) { mutablePending.value = null }
+            synchronized(lock) {
+                mutablePending.value = task.entries.filterNot { it.id in ids }
+                    .takeIf { it.isNotEmpty() }?.let { task.copy(entries = it) }
+            }
             return result
         } finally {
             synchronized(lock) { mutableBusy.value = false }

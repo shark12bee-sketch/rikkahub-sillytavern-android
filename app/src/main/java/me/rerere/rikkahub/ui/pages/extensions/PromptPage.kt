@@ -324,12 +324,7 @@ private fun ModeInjectionTab(
                             injection = injection,
                             modifier = Modifier
                                 .longPressDraggableHandle()
-                                .graphicsLayer {
-                                    if (isDragging) {
-                                        scaleX = 1.05f
-                                        scaleY = 1.05f
-                                    }
-                                },
+                                .promptReorderLift(isDragging),
                             onEdit = { editState.open(injection) },
                             onDelete = { onUpdate(modeInjections - injection) }
                         )
@@ -1170,12 +1165,7 @@ private fun LorebookTab(
                             book = book,
                             modifier = Modifier
                                 .longPressDraggableHandle()
-                                .graphicsLayer {
-                                    if (isDragging) {
-                                        scaleX = 1.05f
-                                        scaleY = 1.05f
-                                    }
-                                },
+                                .promptReorderLift(isDragging),
                             onEdit = { editState.open(book) },
                             onDelete = { onUpdate(lorebooks - book) }
                         )
@@ -1418,7 +1408,8 @@ internal fun LorebookEditSheet(
                 val saved = onCommitBatch(request)
                 onEdit(saved)
                 baselineJson = JsonInstant.encodeToString(saved)
-                movingStrings = emptyList()
+                val action = request.action
+                if (action is LorebookBatchAction.Move) movingStrings = movingStrings.filterNot { Uuid.parse(it) in action.ids }
             } catch (cancelled: kotlinx.coroutines.CancellationException) {
                 throw cancelled
             } catch (failure: Exception) {
@@ -1428,9 +1419,11 @@ internal fun LorebookEditSheet(
             }
         }
     }
-    fun commitBatch(placement: LorebookEntryPlacement?, atEnd: Boolean?) {
+    fun commitBatch(placement: LorebookEntryPlacement?, atEnd: Boolean?, singleId: Uuid? = null) {
         if (savingBatch || copyBusy) return
-        val action = copyTask?.let { LorebookBatchAction.Copy(it) } ?: LorebookBatchAction.Move(movingIds)
+        val ids = singleId?.let { setOf(it) }
+        val action = copyTask?.let { LorebookBatchAction.Copy(it, ids ?: it.entries.map { entry -> entry.id }.toSet()) }
+            ?: LorebookBatchAction.Move(ids ?: movingIds)
         val request = LorebookBatchRequest(book, baseline, action, placement, atEnd)
         if (action is LorebookBatchAction.Copy) {
             if (canCopyHere) copyConfirmation = request
@@ -1568,7 +1561,8 @@ internal fun LorebookEditSheet(
                         }
                     }
                 },
-                onCommitBatch = ::commitBatch,
+                onCommitBatch = { placement, end -> commitBatch(placement, end) },
+                onCommitSingle = { id, placement -> commitBatch(placement, null, id) },
                 batchEnabled = !savingBatch && !copyBusy && canCopyHere,
                 batchBusy = savingBatch || copyBusy,
                 batchHint = if (copyTask != null) {

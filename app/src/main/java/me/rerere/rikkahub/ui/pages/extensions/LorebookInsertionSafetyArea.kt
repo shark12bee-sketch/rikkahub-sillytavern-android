@@ -1,10 +1,6 @@
 package me.rerere.rikkahub.ui.pages.extensions
 
-import androidx.compose.foundation.gestures.detectDragGestures
-import androidx.compose.foundation.gestures.awaitEachGesture
-import androidx.compose.foundation.gestures.awaitFirstDown
-import androidx.compose.foundation.gestures.awaitLongPressOrCancellation
-import androidx.compose.foundation.gestures.drag
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -21,24 +17,24 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import kotlin.uuid.Uuid
 
 /** Gesture lifetime only. Pending-entry data remains owned by the editor, outside this container. */
 internal class LorebookInsertionState {
     var pointer by mutableStateOf<LorebookDragPoint?>(null)
     var safetyBounds by mutableStateOf<LorebookDragBounds?>(null)
+    var previewBounds by mutableStateOf<Rect?>(null)
+    var previewWindow by mutableStateOf(LorebookThumbnailWindow())
+    var drag by mutableStateOf<LorebookInsertionDrag?>(null)
 }
 
 /**
@@ -59,65 +55,12 @@ internal fun LorebookInsertionSafetyArea(
     compact: Boolean = false,
     enabled: Boolean = true,
     cancelEnabled: Boolean = true,
+    onConfirmSingle: (Uuid, LorebookEntryPlacement) -> Unit = { _, _ -> },
     idleHint: String = "安全区：拖动手柄选择同组位置；快捷插入首尾会立即保存",
-    content: @Composable (handleModifier: Modifier) -> Unit,
+    content: @Composable (handleModifier: Modifier, thumbnailHandle: @Composable (Uuid, () -> Unit) -> Modifier) -> Unit,
 ) {
-    var handleCoordinates by remember(state) { mutableStateOf<LayoutCoordinates?>(null) }
-    val currentFeedback by rememberUpdatedState(feedback)
-    val currentConfirm by rememberUpdatedState(onConfirm)
-
-    fun updatePointer(position: Offset) {
-        state.pointer = handleCoordinates?.takeIf { it.isAttached }?.localToRoot(position)?.let {
-            LorebookDragPoint(it.x, it.y)
-        }
-    }
-
-    fun finishGesture(position: Offset) {
-        updatePointer(position)
-        val target = currentFeedback().placement
-        state.pointer = null
-        if (target != null) currentConfirm(target)
-    }
-
-    val handleModifier = Modifier
-        .onGloballyPositioned { handleCoordinates = it }
-        .pointerInput(state, longPressDrag, enabled) {
-            if (!enabled) return@pointerInput
-            if (longPressDrag) {
-                // Only the dedicated handle owns this gesture; horizontal thumbnail scrolling
-                // never enters this detector. Retain the final UP position for safe-area checks.
-                awaitEachGesture {
-                    try {
-                        val down = awaitFirstDown(requireUnconsumed = false)
-                        val held = awaitLongPressOrCancellation(down.id)
-                        if (held != null) {
-                            updatePointer(held.position)
-                            val released = drag(held.id) { change ->
-                                change.consume()
-                                updatePointer(change.position)
-                            }
-                            if (released) {
-                                val up = currentEvent.changes.firstOrNull { !it.pressed }
-                                if (up != null) { up.consume(); finishGesture(up.position) }
-                            }
-                        }
-                    } finally {
-                        state.pointer = null
-                    }
-                }
-            } else detectDragGestures(
-                orientationLock = null,
-                onDragStart = { _, change, _ -> updatePointer(change.position) },
-                onDragCancel = { state.pointer = null },
-                onDragEnd = { change ->
-                    finishGesture(change.position)
-                },
-                onDrag = { change, _ ->
-                    change.consume()
-                    updatePointer(change.position)
-                },
-            )
-        }
+    val handleModifier = lorebookInsertionHandle(state, enabled, longPressDrag, feedback,
+        onConfirm = { _, placement -> onConfirm(placement) })
 
     val dragFeedback = feedback()
     Surface(
@@ -160,13 +103,15 @@ internal fun LorebookInsertionSafetyArea(
                 .verticalScroll(rememberScrollState())
             Box(
                 previewModifier.graphicsLayer {
-                        alpha = if (dragFeedback.phase == LorebookDragPhase.INSERTION) 0.45f else 1f
-                        scaleX = if (longPressDrag && state.pointer != null) 0.98f else 1f
-                        scaleY = scaleX
-                        shadowElevation = if (longPressDrag && state.pointer != null) 6.dp.toPx() else 0f
+                        alpha = if (!compact && dragFeedback.phase == LorebookDragPhase.INSERTION) 0.45f else 1f
                     },
             ) {
-                content(handleModifier)
+                content(handleModifier) { id, onTap ->
+                    if (enabled) lorebookInsertionHandle(state, true, true, feedback,
+                        onConfirm = { entryId, placement -> if (entryId != null) onConfirmSingle(entryId, placement) },
+                        entryId = id, onTap = onTap)
+                    else Modifier.clickable(enabled = cancelEnabled, onClick = onTap)
+                }
             }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 TextButton(onClick = { onInsertAtEdge(false) }, enabled = enabled) { Text("插入最前") }
