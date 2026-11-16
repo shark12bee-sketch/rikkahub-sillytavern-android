@@ -87,7 +87,7 @@ jobs:
           profile: pixel_2
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
-          script: if [ -n "$UI_TEST_CLASS" ]; then set -- "-Pandroid.testInstrumentationRunnerArguments.class=$UI_TEST_CLASS"; else set --; fi; ./gradlew :app:connectedDebugAndroidTest -Pandroid.injected.androidTest.leaveApksInstalledAfterRun=true -Pandroid.testInstrumentationRunnerArguments.package=me.rerere.rikkahub.ui.pages.extensions "$@" -x :web:buildWebUi --stacktrace; result=$?; captured=0; if [ -z "$UI_TEST_CLASS" ]; then for folder in round5-layout round6-layout; do adb pull "/sdcard/Android/data/me.rerere.rikkahub.huadeng.debug/files/$folder" "$folder" || captured=1; done; fi; adb pull /sdcard/Android/data/me.rerere.rikkahub.huadeng.debug/files/worldbook-editor-round7 worldbook-editor-round7 || captured=1; if [ "$result" -ne 0 ]; then exit "$result"; fi; exit "$captured"
+          script: if [ -n "$UI_TEST_CLASS" ]; then set -- "-Pandroid.testInstrumentationRunnerArguments.class=$UI_TEST_CLASS"; else set --; fi; ./gradlew :app:connectedDebugAndroidTest -Pandroid.injected.androidTest.leaveApksInstalledAfterRun=true -Pandroid.testInstrumentationRunnerArguments.package=me.rerere.rikkahub.ui.pages.extensions "$@" -x :web:buildWebUi --stacktrace; result=$?; captured=0; if [ -z "$UI_TEST_CLASS" ]; then for folder in round5-layout round6-layout; do adb pull "/sdcard/Android/data/me.rerere.rikkahub.huadeng.debug/files/$folder" "$folder" || captured=1; done; for folder in worldbook-editor-round7 worldbook-editor-round8; do adb pull "/sdcard/Android/data/me.rerere.rikkahub.huadeng.debug/files/$folder" "$folder" || captured=1; done; else adb pull /sdcard/Android/data/me.rerere.rikkahub.huadeng.debug/files/worldbook-editor-round8 worldbook-editor-round8 || captured=1; fi; if [ "$result" -ne 0 ]; then exit "$result"; fi; exit "$captured"
       - name: Verify all editor UI test classes executed
         if: inputs.ui_test_class == ''
         run: |
@@ -96,7 +96,7 @@ jobs:
           import xml.etree.ElementTree as ET
           cases = [case for file in Path('app/build/outputs/androidTest-results').rglob('TEST-*.xml')
                    for case in ET.parse(file).getroot().iter('testcase')]
-          expected = {'LorebookEntryLayoutTest': 6, 'LorebookEntryBatchUiTest': 3, 'LorebookEntryCopyUiTest': 2, 'LorebookEntryRailGestureTest': 3, 'LorebookEntryThumbnailUiTest': 6, 'LorebookEntryHelpUiTest': 2, 'LorebookEntryGroupsUiTest': 6}
+          expected = {'LorebookEntryLayoutTest': 6, 'LorebookEntryBatchUiTest': 3, 'LorebookEntryCopyUiTest': 2, 'LorebookEntryRailGestureTest': 3, 'LorebookEntryThumbnailUiTest': 6, 'LorebookEntryHelpUiTest': 2, 'LorebookEntryGroupsUiTest': 6, 'LorebookEntryRepairUiTest': 6}
           for name, count in expected.items():
               executed = [case for case in cases if case.attrib.get('classname', '').endswith('.' + name)]
               assert len(executed) == count, (name, len(executed), count)
@@ -132,6 +132,7 @@ jobs:
             round5-layout/
             round6-layout/
             worldbook-editor-round7/
+            worldbook-editor-round8/
             app/build/outputs/androidTest-results/
             app/build/reports/androidTests/
       - uses: actions/upload-artifact@v4
