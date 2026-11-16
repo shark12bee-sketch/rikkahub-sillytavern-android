@@ -24,7 +24,6 @@ class LorebookEntryDragTest {
         safety = safety,
         viewport = bounds,
         targets = targets,
-        group = "A",
         edgeSize = 64f,
         maxScrollVelocity = 720f,
         canScrollBackward = backward,
@@ -49,8 +48,8 @@ class LorebookEntryDragTest {
         val before = feedback(LorebookDragPoint(280f, 230f))
         val after = feedback(LorebookDragPoint(280f, 290f))
         assertEquals(LorebookDragPhase.INSERTION, before.phase)
-        assertEquals(LorebookEntryPlacement(first.id, false), before.placement)
-        assertEquals(LorebookEntryPlacement(first.id, true), after.placement)
+        assertEquals(LorebookEntryPlacement(first.id, false, "A"), before.placement)
+        assertEquals(LorebookEntryPlacement(first.id, true, "A"), after.placement)
     }
 
     @Test
@@ -107,8 +106,8 @@ class LorebookEntryDragTest {
     }
 
     @Test
-    fun `wrong group never becomes a drop target`() {
-        assertNull(feedback(LorebookDragPoint(280f, 360f)).placement)
+    fun `foreign group becomes an explicit drop destination`() {
+        assertEquals("B", feedback(LorebookDragPoint(280f, 360f)).placement?.group)
     }
 
     @Test
@@ -117,7 +116,7 @@ class LorebookEntryDragTest {
         val short = otherGroup.copy(top = 220f, bottom = 300f)
         val point = LorebookDragPoint(280f, 320f)
         assertEquals(tall.id, feedback(point, targets = listOf(short, tall)).placement?.targetId)
-        assertNull(feedback(point, targets = listOf(first, tall.copy(group = "B"))).placement)
+        assertEquals("B", feedback(point, targets = listOf(first, tall.copy(group = "B"))).placement?.group)
     }
 
     @Test

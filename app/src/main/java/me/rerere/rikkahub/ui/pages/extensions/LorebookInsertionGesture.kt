@@ -105,7 +105,7 @@ internal fun lorebookInsertionHandle(
                 }
             } else detectDragGestures(
                 orientationLock = null,
-                onDragStart = { _, change, _ -> start(change.position) },
+                onDragStart = { down, change, _ -> start(down.position); update(change.position) },
                 onDragCancel = { finish(null, true) },
                 onDragEnd = { finish(it.position, false) },
                 onDrag = { change, _ -> change.consume(); update(change.position) },

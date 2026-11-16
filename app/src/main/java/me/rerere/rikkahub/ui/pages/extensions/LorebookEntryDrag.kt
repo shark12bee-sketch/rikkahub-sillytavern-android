@@ -28,12 +28,10 @@ internal fun evaluateLorebookEntryDrag(
     safety: LorebookDragBounds?,
     viewport: LorebookDragBounds?,
     targets: List<LorebookDropTarget>,
-    group: String,
     edgeSize: Float,
     maxScrollVelocity: Float,
     canScrollBackward: Boolean,
     canScrollForward: Boolean,
-    allowCrossGroup: Boolean = false,
 ): LorebookDragFeedback {
     if (pointer == null) return LorebookDragFeedback(LorebookDragPhase.IDLE)
     if (safety?.contains(pointer) == true) return LorebookDragFeedback(LorebookDragPhase.SAFE)
@@ -42,10 +40,10 @@ internal fun evaluateLorebookEntryDrag(
     val visible = targets.filter { it.bottom > viewport.top && it.top < viewport.bottom }
     val target = visible.firstOrNull { pointer.y >= it.top && pointer.y < it.bottom }
         ?: visible.minByOrNull { minOf(abs(pointer.y - it.top), abs(pointer.y - it.bottom)) }
-    val placement = target?.takeIf { allowCrossGroup || it.group == group }?.let {
+    val placement = target?.let {
         if (it.id == null) LorebookEntryPlacement.groupEdge(it.group, false)
         else LorebookEntryPlacement(it.id, after = pointer.y > (it.top + it.bottom) / 2f,
-            group = it.group.takeIf { allowCrossGroup })
+            group = it.group)
     }
     // Prevent overlapping edge bands in a short viewport. Speed is distance-based, in px/second.
     val edge = edgeSize.coerceIn(0f, (viewport.bottom - viewport.top) / 3f)

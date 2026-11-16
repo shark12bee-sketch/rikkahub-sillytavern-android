@@ -39,7 +39,7 @@ internal fun LorebookGroupManagement(book: Lorebook, onEdit: (Lorebook) -> Unit,
     var error by remember { mutableStateOf<String?>(null) }
     AlertDialog(onDismissRequest = onDismiss, title = { Text("管理分组") }, text = {
         Column(Modifier.heightIn(max = 400.dp).verticalScroll(rememberScrollState())) {
-            OutlinedTextField(name, { name = it; error = null }, label = { Text("新分组名称") }, singleLine = true)
+            OutlinedTextField(name, { name = it; error = null }, modifier = Modifier.testTag("lorebook-group-name"), label = { Text("新分组名称") }, singleLine = true)
             TextButton(onClick = {
                 runCatching { createLorebookEntryGroup(book, name) }.onSuccess { onEdit(it); name = "" }
                     .onFailure { error = it.message }

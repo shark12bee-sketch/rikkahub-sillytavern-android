@@ -189,9 +189,9 @@ internal fun lorebookCopyConfirmation(request: LorebookBatchRequest): String {
     val action = request.action as LorebookBatchAction.Copy
     val task = action.task.copy(entries = orderedLorebookSelection(action.task.entries, action.ids))
     val group = request.placement?.group ?: task.entries.first().group
-    val existingGroups = request.draft.entries.flatMap { entry ->
+    val existingGroups = (request.draft.entryGroups + request.draft.entries.flatMap { entry ->
         listOf(entry.group) + entry.inclusionGroup.split(",").map { it.trim() }
-    }.toSet()
+    }).toSet()
     val grouping = when {
         group.isBlank() -> "目标为未分组；来源分组不写回，其他配置保留。"
         group in existingGroups -> "目标为「$group」分组；目标已有同名的普通或包含分组，按现有规则参与触发与竞争。"
@@ -215,7 +215,7 @@ internal fun lorebookCopyConfirmation(request: LorebookBatchRequest): String {
 }
 
 internal fun lorebookInsertionInstructions(mode: LorebookBatchMode?): String = when (mode) {
-    null -> "拖动右侧手柄拿起新增条目。拖出安全区选择插入位置；返回安全区暂停。可选择目标分组并使用组内首尾按钮。取消不会写入条目。"
-    else -> "短按方块：预览条目。\n长按方块：单条拖动。\n长按右侧三条杠：整组拖动。\n拖出安全区：选择插入位置。\n返回安全区：暂停插入判断。" +
+    null -> "拖动右侧手柄拿起新增条目。拖出安全区选择插入位置；返回安全区暂停。拖到组头会插入组内最前；首尾按钮只作用于当前范围。取消不会写入条目。"
+    else -> "短按方块：预览条目。\n长按方块：单条拖动。\n长按右侧三条杠：整组拖动。\n拖出安全区：选择插入位置。\n返回安全区：暂停插入判断。\n拖到组头：插入该组最前；首尾按钮只作用于当前范围。" +
         if (mode == LorebookBatchMode.COPY) "\n复制不会删除来源条目；副本生成独立 ID，确认目标后才保存。" else "\n确认落点前不修改原列表；保存成功后只移除已插入的暂存条目。"
 }
