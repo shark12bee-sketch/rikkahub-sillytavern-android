@@ -1575,13 +1575,12 @@ internal fun RegexInjectionEntryCard(
             Column(
                 modifier = Modifier
                     .weight(1f)
-                    .padding(start = 4.dp)
-                    .padding(12.dp)
+                    .padding(start = 16.dp, top = 8.dp, end = 4.dp, bottom = 12.dp)
             ) {
             // 第一行：名称 + 启用开关 + 操作按钮
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 // 条目名称（可点击编辑）
@@ -1617,17 +1616,18 @@ internal fun RegexInjectionEntryCard(
                 Switch(
                     checked = entry.enabled,
                     onCheckedChange = { onUpdate(entry.copy(enabled = it)) },
-                    modifier = Modifier.size(32.dp),
+                    modifier = Modifier.size(width = 52.dp, height = 48.dp),
                 )
-                IconButton(onClick = onEdit, modifier = Modifier.size(32.dp)) {
+                IconButton(onClick = onEdit, modifier = Modifier.size(48.dp)) {
                     Icon(HugeIcons.Tools, stringResource(R.string.prompt_page_edit), modifier = Modifier.size(18.dp))
                 }
-                IconButton(onClick = onDelete, modifier = Modifier.size(32.dp)) {
+                IconButton(onClick = onDelete, modifier = Modifier.size(48.dp)) {
                     Icon(HugeIcons.Delete01, stringResource(R.string.prompt_page_delete), modifier = Modifier.size(18.dp))
                 }
                 dragHandle()
             }
 
+            Column(Modifier.padding(end = 8.dp)) {
             if (collapsed) {
                 Text(
                     text = "P${entry.probability}% · " +
@@ -1764,6 +1764,7 @@ internal fun RegexInjectionEntryCard(
                         )
                     }
                 }
+            }
             }
             }
         }
