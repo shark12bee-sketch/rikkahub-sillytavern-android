@@ -30,6 +30,17 @@ import me.rerere.rikkahub.data.model.PromptInjection
 /** A separate window changes neither the fixed safety area nor the list's viewport. */
 @Composable
 internal fun LorebookEntryPreviewPopup(entry: PromptInjection.RegexInjection, onDismiss: () -> Unit) {
+    LorebookReadOnlyPopup("条目预览", "lorebook-entry-preview", "关闭预览", onDismiss) {
+        Text(entry.name.ifBlank { "未命名条目" }, style = MaterialTheme.typography.titleMedium)
+        Text(entry.content.ifEmpty { "（正文为空）" }, Modifier.padding(top = 8.dp),
+            style = MaterialTheme.typography.bodyMedium)
+    }
+}
+
+@Composable
+internal fun LorebookReadOnlyPopup(
+    title: String, tag: String, closeLabel: String, onDismiss: () -> Unit, content: @Composable () -> Unit,
+) {
     val margin = with(LocalDensity.current) { 8.dp.roundToPx() }
     val position = remember(margin) {
         object : PopupPositionProvider {
@@ -47,18 +58,16 @@ internal fun LorebookEntryPreviewPopup(entry: PromptInjection.RegexInjection, on
     }
     Popup(position, onDismissRequest = onDismiss, properties = PopupProperties(focusable = true)) {
         Surface(Modifier.padding(8.dp).widthIn(max = 360.dp).fillMaxWidth()
-            .heightIn(max = 320.dp).testTag("lorebook-entry-preview"),
+            .heightIn(max = 320.dp).testTag(tag),
             shape = MaterialTheme.shapes.large, shadowElevation = 6.dp,
             color = MaterialTheme.colorScheme.surfaceContainer) {
             Column(Modifier.padding(12.dp)) {
                 Row {
-                    Text("条目预览", Modifier.weight(1f), style = MaterialTheme.typography.labelLarge)
-                    TextButton(onClick = onDismiss) { Text("关闭预览") }
+                    Text(title, Modifier.weight(1f), style = MaterialTheme.typography.labelLarge)
+                    TextButton(onClick = onDismiss) { Text(closeLabel) }
                 }
                 Column(Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState())) {
-                    Text(entry.name.ifBlank { "未命名条目" }, style = MaterialTheme.typography.titleMedium)
-                    Text(entry.content.ifEmpty { "（正文为空）" }, Modifier.padding(top = 8.dp),
-                        style = MaterialTheme.typography.bodyMedium)
+                    content()
                 }
             }
         }

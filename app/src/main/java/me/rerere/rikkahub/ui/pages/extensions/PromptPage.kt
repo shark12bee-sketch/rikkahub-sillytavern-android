@@ -1729,6 +1729,16 @@ internal fun RegexInjectionEntryCard(
     var editingName by remember { mutableStateOf(false) }
     var editNameValue by remember { mutableStateOf(entry.name) }
 
+    val viewConfiguration = androidx.compose.ui.platform.LocalViewConfiguration.current
+    val controlsConfiguration = remember(viewConfiguration) {
+        object : androidx.compose.ui.platform.ViewConfiguration by viewConfiguration {
+            override val minimumTouchTargetSize = androidx.compose.ui.unit.DpSize(32.dp, 32.dp)
+        }
+    }
+    androidx.compose.runtime.CompositionLocalProvider(
+        androidx.compose.ui.platform.LocalViewConfiguration provides controlsConfiguration,
+        androidx.compose.material3.LocalMinimumInteractiveComponentSize provides 32.dp,
+    ) {
     Card(
         modifier = if (!entry.enabled) Modifier.fillMaxWidth().alpha(0.5f) else Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(20.dp),
@@ -1746,22 +1756,21 @@ internal fun RegexInjectionEntryCard(
                 Column(
                     modifier = Modifier
                         .weight(1f)
-                        .padding(start = 12.dp, top = 8.dp, end = 8.dp, bottom = 8.dp)
+                        .padding(start = 12.dp, top = 6.dp, end = 8.dp, bottom = 6.dp)
                 ) {
                 val weightLabel = stringResource(R.string.prompt_page_group_weight_preview, entry.groupWeight)
                 val constantLabel = stringResource(R.string.prompt_page_constant_preview)
-                val metadata = if (collapsed) {
-                    "P${entry.probability}% · " + (entry.keywords + entry.secondaryKeys).joinToString(", ")
-                } else listOfNotNull(
+                val metadata = listOfNotNull(
                     "P${entry.probability}%",
+                    (entry.keywords + entry.secondaryKeys).joinToString(", ").takeIf { it.isNotBlank() },
                     entry.group.takeIf { it.isNotBlank() },
-                    weightLabel.takeIf { entry.group.isNotBlank() },
+                    weightLabel.takeIf { !collapsed && entry.group.isNotBlank() },
                     constantLabel.takeIf { entry.constantActive },
                 ).joinToString(" · ")
                 // The title owns the main column; actions no longer consume its width.
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(2.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     // 条目名称（可点击编辑）
@@ -1794,25 +1803,25 @@ internal fun RegexInjectionEntryCard(
                         )
                     }
 
+                    Switch(
+                        checked = entry.enabled,
+                        onCheckedChange = { onUpdate(entry.copy(enabled = it)) },
+                        modifier = Modifier.size(width = 52.dp, height = 32.dp),
+                    )
                 }
                 Row(
                     Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(2.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(
                         metadata, Modifier.weight(1f), style = MaterialTheme.typography.labelSmall,
-                        maxLines = if (collapsed) 1 else 2, overflow = TextOverflow.Ellipsis,
+                        maxLines = 1, overflow = TextOverflow.Ellipsis,
                     )
-                    Switch(
-                        checked = entry.enabled,
-                        onCheckedChange = { onUpdate(entry.copy(enabled = it)) },
-                        modifier = Modifier.size(width = 52.dp, height = 48.dp),
-                    )
-                    IconButton(onClick = onEdit, modifier = Modifier.size(48.dp)) {
+                    IconButton(onClick = onEdit, modifier = Modifier.size(32.dp)) {
                         Icon(HugeIcons.Tools, stringResource(R.string.prompt_page_edit), modifier = Modifier.size(18.dp))
                     }
-                    IconButton(onClick = onDelete, modifier = Modifier.size(48.dp)) {
+                    IconButton(onClick = onDelete, modifier = Modifier.size(32.dp)) {
                         Icon(HugeIcons.Delete01, stringResource(R.string.prompt_page_delete), modifier = Modifier.size(18.dp))
                     }
                 }
@@ -1827,20 +1836,6 @@ internal fun RegexInjectionEntryCard(
                         modifier = Modifier.clickable(onClick = onEdit),
                     )
                 } else {
-                // 触发词（紧凑显示）
-                if (entry.keywords.isNotEmpty() || entry.secondaryKeys.isNotEmpty()) {
-                    Text(
-                        text = entry.keywords.joinToString(", ").let {
-                            if (it.length > 100) it.take(100) + "…" else it
-                        },
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.padding(top = 2.dp),
-                    )
-                }
-
                 // 注入内容预览（可展开编辑）
                 var contentExpanded by remember { mutableStateOf(false) }
                 var editContent by remember(entry.content) { mutableStateOf(entry.content) }
@@ -1897,7 +1892,7 @@ internal fun RegexInjectionEntryCard(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 maxLines = 3,
                                 overflow = TextOverflow.Ellipsis,
-                                modifier = Modifier.padding(10.dp),
+                                modifier = Modifier.padding(8.dp),
                             )
                         }
                     } else {
@@ -1911,7 +1906,7 @@ internal fun RegexInjectionEntryCard(
                                 text = stringResource(R.string.prompt_page_add_content),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.padding(10.dp),
+                                modifier = Modifier.padding(8.dp),
                             )
                         }
                     }
@@ -1923,6 +1918,7 @@ internal fun RegexInjectionEntryCard(
         }
 }
 
+}
 }
 
 @Composable

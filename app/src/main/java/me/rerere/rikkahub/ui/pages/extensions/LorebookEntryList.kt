@@ -165,6 +165,7 @@ internal fun LorebookEntryList(
                     cancelEnabled = !batchBusy,
                     idleHint = batchHint ?: if (batch != null) "长按右侧手柄整组拖动，选择同组落点；快捷插入首尾会立即保存"
                         else "安全区：拖动手柄选择同组位置；快捷插入首尾会立即保存",
+                    instructions = (batchHint?.let { "$it\n" }.orEmpty()) + lorebookInsertionInstructions(batch?.mode),
                     onCancel = onCancelPending,
                     onInsertAtEdge = { if (batch != null) onCommitBatch(null, it) else onInsertPendingAtEdge(it) },
                 ) { handleModifier, thumbnailHandle ->
@@ -220,7 +221,7 @@ internal fun LorebookEntryList(
                         )
                     }
                     if (expanded) items(entries, key = { it.id.toString() }) { entry ->
-                        Box {
+                        Box(Modifier.animateItem()) {
                             ReorderableItem(
                                 reorderState,
                                 entry.id.toString(),
@@ -300,6 +301,7 @@ private fun NewLorebookEntryPreview(
     onUpdate: (PromptInjection.RegexInjection) -> Unit,
     onCancel: () -> Unit,
 ) {
+    PromptPendingEntrance(entry.id) {
     RegexInjectionEntryCard(
         entry = entry,
         dragHandle = {
@@ -309,6 +311,7 @@ private fun NewLorebookEntryPreview(
         onDelete = onCancel,
         onUpdate = onUpdate,
     )
+    }
 }
 
 /** The 20dp icon lives inside a real 36dp rail, without invisible horizontal hit expansion. */

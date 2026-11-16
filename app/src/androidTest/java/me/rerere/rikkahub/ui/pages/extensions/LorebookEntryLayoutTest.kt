@@ -99,9 +99,14 @@ class LorebookEntryLayoutTest {
             val handle = compose.onNodeWithContentDescription("Handle").fetchSemanticsNode().boundsInRoot
             val delete = compose.onNodeWithContentDescription(context.getString(R.string.prompt_page_delete))
             val edit = compose.onNodeWithContentDescription(context.getString(R.string.prompt_page_edit))
+            assertTrue("Compact card height", card.height <= 132f * density)
+            val titleBounds = compose.onNodeWithText(entry.name).fetchSemanticsNode().boundsInRoot
+            val toggleBounds = compose.onNode(isToggleable()).fetchSemanticsNode().boundsInRoot
+            assertTrue(titleBounds.right <= toggleBounds.left)
+            assertTrue(edit.fetchSemanticsNode().boundsInRoot.top >= toggleBounds.bottom - 1f)
             assertEquals(36f * density, handle.width, 1f)
             assertTrue(handle.height >= card.height - 8f * density - 1f)
-            assertTrue(compose.onNodeWithText(entry.name).fetchSemanticsNode().boundsInRoot.width >= card.width - 64f * density)
+            assertTrue(compose.onNodeWithText(entry.name).fetchSemanticsNode().boundsInRoot.width >= card.width - 124f * density)
             assertEquals(20f * density, compose.onNodeWithTag("lorebook-drag-icon").fetchSemanticsNode().boundsInRoot.width, 1f)
             assertTrue(card.right - compose.onNodeWithTag("lorebook-drag-icon").fetchSemanticsNode().boundsInRoot.right <= 8f * density + 1f)
             assertTrue(card.right - handle.right <= 4f * density + 1f)

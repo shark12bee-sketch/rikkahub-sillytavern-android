@@ -88,7 +88,9 @@ class LorebookEntryCopyUiTest {
 
         compose.onNodeWithText("Open source").performClick()
         compose.onNodeWithText("插入最前").assertIsNotEnabled()
+        compose.onNodeWithContentDescription("插入操作说明").performClick()
         compose.onNodeWithText("这是来源世界书", substring = true).assertIsDisplayed()
+        compose.onNodeWithText("关闭说明").performClick()
         compose.onNodeWithText(cancelLabel).performClick()
         compose.onNodeWithText("Open target").performClick()
         compose.runOnIdle { assertEquals(listOf(source, target), stored) }
