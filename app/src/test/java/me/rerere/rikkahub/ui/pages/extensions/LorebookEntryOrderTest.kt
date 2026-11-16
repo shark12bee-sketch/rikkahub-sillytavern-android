@@ -118,4 +118,30 @@ class LorebookEntryOrderTest {
         assertEquals(originals, entries.associateBy { it.id })
         assertEquals(1000, entries.map { it.id }.distinct().size)
     }
+
+    @Test
+    fun `whole book shortcuts preserve group and every configuration field`() {
+        val entries = listOf(entry("a", "A"), entry("b", "B"))
+        val pending = entry("pending", "B")
+        val front = insertLorebookEntryAtEdge(entries, pending, atEnd = false)
+        val back = insertLorebookEntryAtEdge(entries, pending, atEnd = true)
+        assertEquals(listOf(pending) + entries, front)
+        assertEquals(entries + pending, back)
+        assertSame(pending, front.first())
+        assertSame(pending, back.last())
+        assertEquals(2, entries.size)
+    }
+
+    @Test
+    fun `shortcuts handle empty single entry and duplicate ids`() {
+        val pending = entry("pending", "new group")
+        listOf(false, true).forEach { atEnd ->
+            assertEquals(listOf(pending), insertLorebookEntryAtEdge(emptyList(), pending, atEnd))
+            val existing = entry("existing", "other group")
+            val entries = listOf(existing)
+            val inserted = insertLorebookEntryAtEdge(entries, pending, atEnd)
+            assertEquals(if (atEnd) listOf(existing, pending) else listOf(pending, existing), inserted)
+            assertSame(inserted, insertLorebookEntryAtEdge(inserted, pending, atEnd))
+        }
+    }
 }
