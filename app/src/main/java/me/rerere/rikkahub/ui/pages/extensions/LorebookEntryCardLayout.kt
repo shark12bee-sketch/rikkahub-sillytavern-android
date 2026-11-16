@@ -12,6 +12,8 @@ import androidx.compose.ui.unit.constrainHeight
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
 
+internal val LorebookRailWidth = 36.dp
+
 /** Measure content first; the rail adopts that height instead of expanding a bounded parent. */
 @Composable
 internal fun LorebookEntryCardLayout(dragHandle: @Composable () -> Unit, content: @Composable () -> Unit) {
@@ -25,7 +27,7 @@ internal fun LorebookEntryCardLayout(dragHandle: @Composable () -> Unit, content
             ) { dragHandle() }
         },
     ) { children, constraints ->
-        val railWidth = 36.dp.roundToPx()
+        val railWidth = LorebookRailWidth.roundToPx()
         val margin = 4.dp.roundToPx()
         val width = constraints.maxWidth
         val contentWidth = (width - railWidth - margin).coerceAtLeast(0)

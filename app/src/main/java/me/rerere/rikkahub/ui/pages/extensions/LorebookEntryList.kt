@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -311,20 +312,22 @@ internal fun LorebookDragHandle(description: String, modifier: Modifier = Modifi
     val configuration = LocalViewConfiguration.current
     val railConfiguration = remember(configuration) {
         object : ViewConfiguration by configuration {
-            override val minimumTouchTargetSize = DpSize(36.dp, 0.dp)
+            override val minimumTouchTargetSize = DpSize(LorebookRailWidth, 0.dp)
         }
     }
     val color = MaterialTheme.colorScheme.onSurfaceVariant
     CompositionLocalProvider(LocalViewConfiguration provides railConfiguration) {
         Box(
-            Modifier.width(36.dp).heightIn(min = 48.dp)
+            Modifier.width(LorebookRailWidth).heightIn(min = 48.dp)
                 .semantics { contentDescription = description }.then(modifier),
-            contentAlignment = Alignment.Center,
+            contentAlignment = Alignment.CenterEnd,
         ) {
-            Canvas(Modifier.size(20.dp).testTag("lorebook-drag-icon")) {
-                for (y in listOf(5.dp, 10.dp, 15.dp)) {
-                    drawLine(color, Offset(1.dp.toPx(), y.toPx()), Offset(19.dp.toPx(), y.toPx()),
-                        strokeWidth = 2.dp.toPx(), cap = StrokeCap.Round)
+            Box(Modifier.padding(end = 4.dp)) {
+                Canvas(Modifier.size(20.dp).testTag("lorebook-drag-icon")) {
+                    for (y in listOf(5.dp, 10.dp, 15.dp)) {
+                        drawLine(color, Offset(1.dp.toPx(), y.toPx()), Offset(19.dp.toPx(), y.toPx()),
+                            strokeWidth = 2.dp.toPx(), cap = StrokeCap.Round)
+                    }
                 }
             }
         }

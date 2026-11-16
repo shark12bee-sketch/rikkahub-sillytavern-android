@@ -8,6 +8,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -122,6 +123,22 @@ class LorebookEntryBatchUiTest {
         handle.performTouchInput { down(center) }
         compose.mainClock.advanceTimeBy(700)
         compose.onNodeWithText("已暂停").assertIsDisplayed()
+        handle.performTouchInput { moveTo(Offset(bounds.width / 2f, viewport.center.y - bounds.top)) }
+        compose.mainClock.advanceTimeBy(64)
+        compose.onNodeWithText("松手插入").assertIsDisplayed()
+        val listNode = compose.onNodeWithTag("lorebook-entry-list")
+        fun scrollPosition() = listNode.fetchSemanticsNode().config[SemanticsProperties.VerticalScrollAxisRange].value()
+        val beforeEdge = scrollPosition()
+        handle.performTouchInput { moveTo(Offset(bounds.width / 2f, viewport.bottom - bounds.top - 2f)) }
+        compose.mainClock.advanceTimeBy(250)
+        assertTrue(scrollPosition() > beforeEdge)
+        handle.performTouchInput { moveTo(Offset(bounds.width / 2f, area.center.y - bounds.top)) }
+        compose.mainClock.advanceTimeBy(64)
+        compose.onNodeWithText("已暂停").assertIsDisplayed()
+        val paused = scrollPosition()
+        compose.mainClock.advanceTimeBy(250)
+        assertEquals(paused, scrollPosition(), 0f)
+        compose.runOnIdle { assertFalse(committed); assertEquals(original, draft) }
         handle.performTouchInput { moveTo(Offset(bounds.width / 2f, viewport.center.y - bounds.top)) }
         compose.mainClock.advanceTimeBy(64)
         compose.onNodeWithText("松手插入").assertIsDisplayed()
