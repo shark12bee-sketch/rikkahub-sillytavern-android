@@ -64,7 +64,7 @@ internal fun lorebookInsertionHandle(
     fun start(position: Offset) {
         val point = root(position) ?: return
         val bounds = if (entryId == null) state.previewBounds else coordinates?.boundsInRoot()
-        if (longPress && bounds != null) {
+        if (bounds != null) {
             state.drag = LorebookInsertionDrag(entryId = entryId, origin = bounds, start = point, window = state.previewWindow)
             haptic.performHapticFeedback(HapticFeedbackType.GestureThresholdActivate)
         }
@@ -75,7 +75,7 @@ internal fun lorebookInsertionHandle(
         val target = if (cancelled) null else currentFeedback().placement
         state.pointer = null
         state.drag = state.drag?.copy(released = true, submitted = target != null)
-        if (longPress) haptic.performHapticFeedback(HapticFeedbackType.GestureEnd)
+        haptic.performHapticFeedback(HapticFeedbackType.GestureEnd)
         if (target != null) currentConfirm(entryId, target)
     }
 

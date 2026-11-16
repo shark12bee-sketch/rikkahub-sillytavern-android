@@ -12,5 +12,8 @@ internal fun captureLorebookEditorEvidence(name: String) {
     SystemClock.sleep(150)
     val directory = File(checkNotNull(instrumentation.targetContext.getExternalFilesDir(null)), "worldbook-editor-round7").apply { mkdirs() }
     val bitmap = checkNotNull(instrumentation.uiAutomation.takeScreenshot())
-    File(directory, "$name.png").outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
+    var file = File(directory, "$name.png")
+    var index = 0
+    while (file.exists()) file = File(directory, "$name-${++index}.png")
+    file.outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
 }

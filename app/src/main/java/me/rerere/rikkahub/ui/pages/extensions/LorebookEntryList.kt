@@ -36,6 +36,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -60,7 +62,6 @@ internal fun LorebookEntryList(
     pendingEntry: PromptInjection.RegexInjection?,
     onCancelPending: () -> Unit,
     onInsertPending: (LorebookEntryPlacement?) -> Unit,
-    onInsertPendingAtEdge: (Boolean) -> Unit,
     onUpdatePending: (PromptInjection.RegexInjection) -> Unit,
     modifier: Modifier = Modifier,
     batch: LorebookBatchPreview? = null,
@@ -77,6 +78,7 @@ internal fun LorebookEntryList(
     onEditEntry: (PromptInjection.RegexInjection) -> Unit,
     onAddEntry: (String) -> Unit,
     onGroupSettings: (String, List<PromptInjection.RegexInjection>) -> Unit,
+    onManageGroups: () -> Unit = {},
 ) {
     var collapsed by rememberSaveable(book.id.toString()) { mutableStateOf(false) }
     var expandedGroups by rememberSaveable(book.id.toString()) { mutableStateOf(emptyList<String>()) }
@@ -90,6 +92,12 @@ internal fun LorebookEntryList(
     var listBounds by remember { mutableStateOf<LorebookDragBounds?>(null) }
     val currentGroup by rememberUpdatedState(pendingEntry?.group ?: batch?.group.orEmpty())
     val currentVisible by rememberUpdatedState(visibleEntries)
+    val groupNames = lorebookEntryGroupNames(book)
+    val currentGroups by rememberUpdatedState(groupNames + "")
+    var targetGroup by rememberSaveable(book.id.toString(), pendingEntry?.id?.toString(), batch?.id?.toString()) {
+        mutableStateOf(pendingEntry?.group ?: batch?.group.orEmpty())
+    }
+    LaunchedEffect(pendingEntry?.group) { if (pendingEntry != null) targetGroup = pendingEntry.group }
     val edge = with(LocalDensity.current) { 64.dp.toPx() }
     val maxScrollVelocity = with(LocalDensity.current) { 720.dp.toPx() }
     val listState = rememberLazyListState()
@@ -97,7 +105,11 @@ internal fun LorebookEntryList(
         derivedStateOf {
             val entries = currentVisible.associateBy { it.id.toString() }
             val targets = listState.layoutInfo.visibleItemsInfo.mapNotNull { item ->
-                entries[item.key]?.let { entry ->
+                val headerGroup = (item.key as? String)?.takeIf { it.startsWith("group:") }?.removePrefix("group:")
+                if (headerGroup != null && headerGroup in currentGroups) {
+                    val top = (listBounds?.top ?: 0f) + item.offset
+                    LorebookDropTarget(null, headerGroup, top, top + item.size)
+                } else entries[item.key]?.let { entry ->
                     val top = (listBounds?.top ?: 0f) + item.offset
                     LorebookDropTarget(entry.id, entry.group, top, top + item.size)
                 }
@@ -112,6 +124,7 @@ internal fun LorebookEntryList(
                 maxScrollVelocity = maxScrollVelocity,
                 canScrollBackward = listState.canScrollBackward,
                 canScrollForward = listState.canScrollForward,
+                allowCrossGroup = true,
             )
         }
     }
@@ -166,8 +179,15 @@ internal fun LorebookEntryList(
                     idleHint = batchHint ?: if (batch != null) "长按右侧手柄整组拖动，选择同组落点；快捷插入首尾会立即保存"
                         else "安全区：拖动手柄选择同组位置；快捷插入首尾会立即保存",
                     instructions = (batchHint?.let { "$it\n" }.orEmpty()) + lorebookInsertionInstructions(batch?.mode),
+                    headerActions = {
+                        LorebookGroupTargetSelector(groupNames + listOfNotNull(pendingEntry?.group, batch?.group),
+                            feedback.placement?.group ?: targetGroup, batchEnabled && insertion.pointer == null) { targetGroup = it }
+                    },
                     onCancel = onCancelPending,
-                    onInsertAtEdge = { if (batch != null) onCommitBatch(null, it) else onInsertPendingAtEdge(it) },
+                    onInsertAtEdge = { end ->
+                        val placement = LorebookEntryPlacement.groupEdge(targetGroup, end)
+                        if (batch != null) onCommitBatch(placement, null) else onInsertPending(placement)
+                    },
                 ) { handleModifier, thumbnailHandle ->
                     if (batch != null) LorebookBatchPreviewContent(batch, handleModifier, onRemoveBatchEntry, !batchBusy, insertion, thumbnailHandle)
                     else if (pendingEntry != null) NewLorebookEntryPreview(
@@ -196,15 +216,17 @@ internal fun LorebookEntryList(
                         TextButton(onClick = { collapsed = !collapsed }) {
                             Text(if (collapsed) "展开条目" else "折叠条目")
                         }
+                        TextButton(onClick = onManageGroups, enabled = !batchBusy && insertion.pointer == null) { Text("管理分组") }
                         TextButton(onClick = { onAddEntry("") }, enabled = !taskActive) { Text("新增") }
                     }
                 }
                 val grouped = visibleEntries.groupBy { it.group }
-                val groups = grouped.keys.filter { it.isNotBlank() } + grouped.keys.filter { it.isBlank() }
+                val groups = groupNames + ""
                 groups.forEachIndexed { index, group ->
-                    val entries = grouped.getValue(group)
+                    val entries = grouped[group].orEmpty()
                     val expanded = group.isBlank() || group in expandedGroups
                     item(key = "group:$group") {
+                        Box(Modifier.fillMaxWidth().testTag("lorebook-group:$group")) {
                         if (group.isBlank()) Text("未分组", style = MaterialTheme.typography.labelMedium)
                         else LorebookGroupSection(
                             groupName = group,
@@ -217,8 +239,12 @@ internal fun LorebookEntryList(
                             onGroupSettings = { onGroupSettings(group, entries) },
                             onAddEntry = { if (!taskActive) onAddEntry(group) },
                             canAddEntry = !taskActive,
-                            canEditGroup = !taskActive,
+                            canEditGroup = !taskActive && entries.isNotEmpty(),
                         )
+                        if (feedback.placement?.targetId == null && feedback.placement?.group == group) {
+                            HorizontalDivider(Modifier.align(Alignment.BottomCenter), thickness = 3.dp, color = MaterialTheme.colorScheme.primary)
+                        }
+                        }
                     }
                     if (expanded) items(entries, key = { it.id.toString() }) { entry ->
                         Box(Modifier.animateItem()) {
@@ -234,9 +260,8 @@ internal fun LorebookEntryList(
                                         selection = {
                                             if (selectedIds != null) {
                                             val ids = selectedIds
-                                            val selectedGroup = book.entries.firstOrNull { it.id in ids }?.group
                                             LorebookEntrySelection(
-                                                entry.id in ids, entry.id in ids || selectedGroup == null || entry.group == selectedGroup,
+                                                entry.id in ids, true,
                                                 entry.name, { onSelectEntry(entry.id) },
                                             )
                                             }
@@ -285,6 +310,12 @@ internal fun LorebookEntryList(
             }
         }
         if (batch != null) LorebookBatchDragOverlay(insertion, batch, rootOrigin)
+        else if (pendingEntry != null) LorebookInsertionOverlay(insertion, rootOrigin) {
+            val width = with(LocalDensity.current) { checkNotNull(insertion.drag).origin.width.toDp() }
+            Box(Modifier.width(width).shadow(4.dp, MaterialTheme.shapes.large).clearAndSetSemantics {}) {
+                RegexInjectionEntryCard(pendingEntry, onEdit = {}, onDelete = {})
+            }
+        }
     }
 }
 

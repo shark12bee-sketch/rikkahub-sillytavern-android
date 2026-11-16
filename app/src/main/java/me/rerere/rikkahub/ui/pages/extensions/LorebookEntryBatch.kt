@@ -38,23 +38,32 @@ internal fun insertLorebookBatch(
 ): List<PromptInjection.RegexInjection> {
     require(selected.isNotEmpty()) { "没有可插入的条目，请重新选择" }
     val groups = selected.map { it.group }.distinct()
-    require(groups.size == 1) { "一次只能操作同一分组的条目" }
+    val destination = placement?.group
+    require(destination != null || groups.size == 1) { "跨组操作请明确选择目标分组" }
+    val inserted = if (destination == null) selected else selected.map { if (it.group == destination) it else it.copy(group = destination) }
     require((remaining + selected).map { it.id }.distinct().size == remaining.size + selected.size) {
         "条目 ID 冲突，未修改世界书"
     }
     val index = when {
         atEnd != null -> if (atEnd) remaining.size else 0
         placement != null -> {
-            val target = remaining.indexOfFirst { it.id == placement.targetId && it.group == groups.single() }
+            val group = destination ?: groups.single()
+            if (placement.targetId == null) {
+                require(destination != null) { "请选择目标分组" }
+                val matching = remaining.indices.filter { remaining[it].group == group }
+                if (matching.isEmpty()) remaining.size else if (placement.after) matching.last() + 1 else matching.first()
+            } else {
+            val target = remaining.indexOfFirst { it.id == placement.targetId && it.group == group }
             require(target >= 0) { "插入目标已改变或不属于同一分组，请重新选择落点" }
             target + if (placement.after) 1 else 0
+            }
         }
         else -> {
             require(remaining.none { it.group == groups.single() }) { "请先选择插入位置" }
             remaining.size
         }
     }
-    return remaining.take(index) + selected + remaining.drop(index)
+    return remaining.take(index) + inserted + remaining.drop(index)
 }
 
 internal fun applyLorebookBatch(books: List<Lorebook>, request: LorebookBatchRequest): List<Lorebook> {
@@ -85,7 +94,7 @@ internal fun applyLorebookBatch(books: List<Lorebook>, request: LorebookBatchReq
             insertLorebookBatch(request.draft.entries, copies, request.placement, request.atEnd)
         }
     }
-    val edited = request.draft.copy(entries = entries)
+    val edited = request.draft.withLorebookEntries(entries)
     return if (current == null) books + edited else books.map { if (it.id == edited.id) edited else it }
 }
 

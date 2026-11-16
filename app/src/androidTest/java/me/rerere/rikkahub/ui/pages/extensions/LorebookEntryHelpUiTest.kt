@@ -21,7 +21,7 @@ class LorebookEntryHelpUiTest {
     private fun show(mode: LorebookBatchMode?) {
         compose.setContent {
             MaterialTheme {
-                LorebookEntryList(book, if (mode == null) entry else null, {}, {}, {}, {},
+                LorebookEntryList(book, if (mode == null) entry else null, {}, {}, {},
                     modifier = Modifier.size(360.dp, 560.dp),
                     batch = mode?.let { LorebookBatchPreview(Uuid.random(), it, listOf(entry)) },
                     header = {}, onEntriesChange = {}, onEditEntry = {}, onAddEntry = {}, onGroupSettings = { _, _ -> })
@@ -45,7 +45,7 @@ class LorebookEntryHelpUiTest {
 
     @Test fun newEntryHelpHasNoBatchInstructionsAndPreviewRemainsFullCard() {
         show(null)
-        compose.onNodeWithText("Complete content").assertIsDisplayed()
+        compose.onAllNodesWithText("Complete content").onFirst().assertIsDisplayed()
         compose.onNodeWithTag("lorebook-insertion-help").assertDoesNotExist()
         captureLorebookEditorEvidence("modules-1-3-new-card")
         compose.onNodeWithContentDescription("插入操作说明").performClick()

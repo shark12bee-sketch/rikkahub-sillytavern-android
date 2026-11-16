@@ -57,7 +57,7 @@ class LorebookEntryThumbnailUiTest {
         compose.setContent {
             MaterialTheme {
                 LorebookEntryList(
-                    draft, null, { batch = null }, {}, {}, {},
+                    draft, null, { batch = null }, {}, {},
                     modifier = Modifier.size(360.dp, 560.dp).testTag("thumbnail-editor"), batch = batch,
                     onRemoveBatchEntry = { error("The tile body must never trigger its corner remove button") },
                     onCommitSingle = { id, placement ->

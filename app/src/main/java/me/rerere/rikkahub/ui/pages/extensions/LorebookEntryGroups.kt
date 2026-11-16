@@ -1,0 +1,22 @@
+package me.rerere.rikkahub.ui.pages.extensions
+
+import me.rerere.rikkahub.data.model.Lorebook
+import me.rerere.rikkahub.data.model.PromptInjection
+
+/** Old books derive names from entries; explicit names also retain empty groups and their order. */
+internal fun lorebookEntryGroupNames(book: Lorebook): List<String> =
+    (book.entryGroups + book.entries.map { it.group }).filter { it.isNotBlank() }.distinct()
+
+internal fun Lorebook.withLorebookEntries(entries: List<PromptInjection.RegexInjection>): Lorebook = copy(
+    entries = entries,
+    entryGroups = (lorebookEntryGroupNames(this) + entries.map { it.group }).filter { it.isNotBlank() }.distinct(),
+)
+
+internal fun createLorebookEntryGroup(book: Lorebook, name: String): Lorebook {
+    val group = name.trim()
+    require(group.isNotEmpty()) { "分组名称不能为空" }
+    require(group !in lorebookEntryGroupNames(book)) { "分组已存在" }
+    return book.copy(entryGroups = lorebookEntryGroupNames(book) + group)
+}
+
+internal fun groupLabel(group: String) = group.ifBlank { "未分组" }

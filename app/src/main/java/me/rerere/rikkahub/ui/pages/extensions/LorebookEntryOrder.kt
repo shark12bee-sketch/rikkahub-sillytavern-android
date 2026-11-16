@@ -20,16 +20,10 @@ internal fun moveLorebookEntry(
     return entries.map { if (it.group == from.group) iterator.next() else it }
 }
 
-internal data class LorebookEntryPlacement(val targetId: Uuid, val after: Boolean)
-
-/** Explicit whole-book shortcut; group and all injection settings remain untouched. */
-internal fun insertLorebookEntryAtEdge(
-    entries: List<PromptInjection.RegexInjection>,
-    pending: PromptInjection.RegexInjection,
-    atEnd: Boolean,
-): List<PromptInjection.RegexInjection> {
-    if (entries.any { it.id == pending.id }) return entries
-    return entries.toMutableList().apply { add(if (atEnd) size else 0, pending) }
+internal data class LorebookEntryPlacement(val targetId: Uuid?, val after: Boolean, val group: String? = null) {
+    companion object {
+        fun groupEdge(group: String, atEnd: Boolean) = LorebookEntryPlacement(null, atEnd, group)
+    }
 }
 
 /** Resolve by ID against the latest draft, never by a potentially stale lazy-list index. */
@@ -39,11 +33,5 @@ internal fun insertLorebookEntry(
     placement: LorebookEntryPlacement?,
 ): List<PromptInjection.RegexInjection> {
     if (entries.any { it.id == pending.id }) return entries
-    if (placement == null) {
-        // Only a group with no existing entries has an unambiguous first position.
-        return if (entries.none { it.group == pending.group }) entries + pending else entries
-    }
-    val index = entries.indexOfFirst { it.id == placement.targetId && it.group == pending.group }
-    if (index < 0) return entries
-    return entries.toMutableList().apply { add(index + if (placement.after) 1 else 0, pending) }
+    return runCatching { insertLorebookBatch(entries, listOf(pending), placement, null) }.getOrDefault(entries)
 }

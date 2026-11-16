@@ -732,6 +732,8 @@ data class Lorebook(
     val entries: List<PromptInjection.RegexInjection> = emptyList(),
     // 是否来自角色卡内嵌世界书（官方 world_info_character_str
     val isCharacterBook: Boolean = false,
+    // Display order and empty groups only; entry membership remains RegexInjection.group.
+    val entryGroups: List<String> = emptyList(),
 )
 
 /**

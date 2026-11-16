@@ -1369,6 +1369,8 @@ internal fun LorebookEditSheet(
     }
     var selecting by rememberSaveable(book.id.toString()) { mutableStateOf(false) }
     var selectionMode by rememberSaveable(book.id.toString()) { mutableStateOf(LorebookBatchMode.MOVE.name) }
+    var showGroupManagement by remember { mutableStateOf(false) }
+    var groupMoveConfirmation by remember { mutableStateOf<LorebookBatchRequest?>(null) }
     var copyConfirmation by remember { mutableStateOf<LorebookBatchRequest?>(null) }
     var selectedStrings by rememberSaveable(book.id.toString()) { mutableStateOf(emptyList<String>()) }
     var movingStrings by rememberSaveable(book.id.toString()) { mutableStateOf(emptyList<String>()) }
@@ -1409,7 +1411,11 @@ internal fun LorebookEditSheet(
                 onEdit(saved)
                 baselineJson = JsonInstant.encodeToString(saved)
                 val action = request.action
-                if (action is LorebookBatchAction.Move) movingStrings = movingStrings.filterNot { Uuid.parse(it) in action.ids }
+                if (action is LorebookBatchAction.Move) {
+                    movingStrings = movingStrings.filterNot { Uuid.parse(it) in action.ids }
+                    selecting = false
+                    selectedStrings = emptyList()
+                }
             } catch (cancelled: kotlinx.coroutines.CancellationException) {
                 throw cancelled
             } catch (failure: Exception) {
@@ -1434,7 +1440,7 @@ internal fun LorebookEditSheet(
     val entryEditState = useEditState<PromptInjection.RegexInjection> { edited ->
         val index = book.entries.indexOfFirst { it.id == edited.id }
         if (index >= 0) {
-            onEdit(book.copy(entries = book.entries.toMutableList().apply { set(index, edited) }))
+            onEdit(book.withLorebookEntries(book.entries.toMutableList().apply { set(index, edited) }))
         } else {
             pendingEntryJson = JsonInstant.encodeToString(edited)
         }
@@ -1470,7 +1476,8 @@ internal fun LorebookEditSheet(
                 )
             } else entry
         }
-        onEdit(book.copy(entries = newEntries))
+        val renamed = lorebookEntryGroupNames(book).map { if (it == oldGroupName) newGroupName else it }
+        onEdit(book.copy(entryGroups = renamed.filter { it.isNotBlank() }.distinct()).copy(entries = newEntries))
     }
 
     ModalBottomSheet(
@@ -1534,6 +1541,12 @@ internal fun LorebookEditSheet(
                     }
                 },
                 onCancel = ::cancelBatch,
+                groups = lorebookEntryGroupNames(book),
+                onMoveToGroup = { group ->
+                    val ids = selectedStrings.map { Uuid.parse(it) }.toSet()
+                    if (ids.isNotEmpty()) groupMoveConfirmation = LorebookBatchRequest(book, baseline,
+                        LorebookBatchAction.Move(ids), LorebookEntryPlacement.groupEdge(group, true))
+                },
             )
             if (savingBatch) Text("正在保存，请稍候…", style = MaterialTheme.typography.bodySmall)
             batchError?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
@@ -1546,9 +1559,8 @@ internal fun LorebookEditSheet(
                 onSelectEntry = { id ->
                     // Multiple taps can arrive before recomposition; read the live selection.
                     val latestIds = selectedStrings.map { Uuid.parse(it) }.toSet()
-                    val group = book.entries.firstOrNull { it.id in latestIds }?.group
                     val entry = book.entries.firstOrNull { it.id == id }
-                    if (entry != null && (id in latestIds || group == null || group == entry.group)) {
+                    if (entry != null) {
                         selectedStrings = (if (id in latestIds) latestIds - id else latestIds + id).map(Uuid::toString)
                     }
                 },
@@ -1574,19 +1586,13 @@ internal fun LorebookEditSheet(
                     if (copyTask != null) { onCancelCopy(); batchError = null }
                     else if (moving != null) cancelBatch() else pendingEntryJson = null
                 },
-                onInsertPendingAtEdge = { atEnd ->
-                    pendingEntry?.let { pending ->
-                        val inserted = book.copy(entries = insertLorebookEntryAtEdge(book.entries, pending, atEnd))
-                        onEdit(inserted)
-                        onSave(inserted)
-                        pendingEntryJson = null
-                    }
-                },
                 onInsertPending = { placement ->
                     pendingEntry?.let { pending ->
                         val entries = insertLorebookEntry(book.entries, pending, placement)
                         if (entries.any { it.id == pending.id }) {
-                            onEdit(book.copy(entries = entries))
+                            val inserted = book.withLorebookEntries(entries)
+                            onEdit(inserted)
+                            if (placement?.targetId == null) onSave(inserted)
                             pendingEntryJson = null
                         }
                     }
@@ -1618,8 +1624,9 @@ internal fun LorebookEditSheet(
                     )
 
                 },
-                onEntriesChange = { if (!savingBatch) onEdit(book.copy(entries = it)) },
+                onEntriesChange = { if (!savingBatch) onEdit(book.withLorebookEntries(it)) },
                 onEditEntry = { if (!savingBatch) entryEditState.open(it) },
+                onManageGroups = { showGroupManagement = true },
                 onAddEntry = { group -> entryEditState.open(PromptInjection.RegexInjection(group = group)) },
                 onGroupSettings = { group, entries -> groupEditState.open(group to entries) },
             )
@@ -1652,6 +1659,14 @@ internal fun LorebookEditSheet(
         )
     }
 
+    if (showGroupManagement) LorebookGroupManagement(book, onEdit, { showGroupManagement = false })
+    groupMoveConfirmation?.let { request ->
+        val count = (request.action as LorebookBatchAction.Move).ids.size
+        AlertDialog(onDismissRequest = { groupMoveConfirmation = null }, title = { Text("确认移入分组") },
+            text = { Text("将 $count 条移动到「${groupLabel(request.placement?.group.orEmpty())}」组内最后。仅修改归属和顺序，其余配置保留。") },
+            confirmButton = { TextButton(onClick = { groupMoveConfirmation = null; executeBatch(request) }) { Text("确认移动") } },
+            dismissButton = { TextButton(onClick = { groupMoveConfirmation = null }) { Text("取消移动") } })
+    }
     if (entryEditState.isEditing) {
         entryEditState.currentState?.let { state ->
             RegexInjectionEditDialog(

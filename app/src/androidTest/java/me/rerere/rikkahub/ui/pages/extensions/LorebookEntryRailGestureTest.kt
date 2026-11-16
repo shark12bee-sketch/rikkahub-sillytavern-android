@@ -48,7 +48,7 @@ class LorebookEntryRailGestureTest {
             MaterialTheme {
                 LorebookEntryList(
                     book = draft, pendingEntry = null, onCancelPending = {}, onInsertPending = {},
-                    onInsertPendingAtEdge = {}, onUpdatePending = {},
+                    onUpdatePending = {},
                     modifier = Modifier.size(360.dp, 560.dp).testTag("rail-editor"), header = {},
                     onEntriesChange = { draft = draft.copy(entries = it); reorders++ },
                     onEditEntry = {}, onAddEntry = {}, onGroupSettings = { _, _ -> },
