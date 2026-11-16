@@ -1,6 +1,10 @@
 package me.rerere.rikkahub.ui.pages.extensions
 
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.awaitLongPressOrCancellation
+import androidx.compose.foundation.gestures.drag
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -49,6 +53,9 @@ internal fun LorebookInsertionSafetyArea(
     onCancel: () -> Unit,
     onInsertAtEdge: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
+    longPressDrag: Boolean = false,
+    enabled: Boolean = true,
+    idleHint: String = "安全区：拖动手柄选择同组位置；快捷插入首尾会立即保存",
     content: @Composable (handleModifier: Modifier) -> Unit,
 ) {
     var handleCoordinates by remember(state) { mutableStateOf<LayoutCoordinates?>(null) }
@@ -61,20 +68,45 @@ internal fun LorebookInsertionSafetyArea(
         }
     }
 
+    fun finishGesture(position: Offset) {
+        updatePointer(position)
+        val target = currentFeedback().placement
+        state.pointer = null
+        if (target != null) currentConfirm(target)
+    }
+
     val handleModifier = Modifier
         .onGloballyPositioned { handleCoordinates = it }
-        .pointerInput(state) {
-            detectDragGestures(
+        .pointerInput(state, longPressDrag, enabled) {
+            if (!enabled) return@pointerInput
+            if (longPressDrag) {
+                // Only the dedicated handle owns this gesture; horizontal thumbnail scrolling
+                // never enters this detector. Retain the final UP position for safe-area checks.
+                awaitEachGesture {
+                    try {
+                        val down = awaitFirstDown(requireUnconsumed = false)
+                        val held = awaitLongPressOrCancellation(down.id)
+                        if (held != null) {
+                            updatePointer(held.position)
+                            val released = drag(held.id) { change ->
+                                change.consume()
+                                updatePointer(change.position)
+                            }
+                            if (released) {
+                                val up = currentEvent.changes.firstOrNull { !it.pressed }
+                                if (up != null) { up.consume(); finishGesture(up.position) }
+                            }
+                        }
+                    } finally {
+                        state.pointer = null
+                    }
+                }
+            } else detectDragGestures(
                 orientationLock = null,
                 onDragStart = { _, change, _ -> updatePointer(change.position) },
                 onDragCancel = { state.pointer = null },
                 onDragEnd = { change ->
-                    updatePointer(change.position)
-                    // Re-evaluate after the UP coordinate, before clearing the gesture. Reading a
-                    // composited feedback value here could commit the last MOVE's stale target.
-                    val target = currentFeedback().placement
-                    state.pointer = null
-                    if (target != null) currentConfirm(target)
+                    finishGesture(change.position)
                 },
                 onDrag = { change, _ ->
                     change.consume()
@@ -95,7 +127,7 @@ internal fun LorebookInsertionSafetyArea(
         Column(Modifier.padding(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text(title, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
             val status = when (dragFeedback.phase) {
-                LorebookDragPhase.IDLE -> "安全区：拖动手柄选择同组位置；快捷插入首尾会立即保存"
+                LorebookDragPhase.IDLE -> idleHint
                 LorebookDragPhase.SAFE -> "安全区内 · 插入已暂停；向下拖出安全区继续"
                 LorebookDragPhase.INSERTION -> if (dragFeedback.placement != null) {
                     "正在选择插入位置 · 松手插入指示线处"
@@ -106,14 +138,18 @@ internal fun LorebookInsertionSafetyArea(
             Box(
                 Modifier.weight(1f, fill = false)
                     .verticalScroll(rememberScrollState())
-                    .graphicsLayer { alpha = if (dragFeedback.phase == LorebookDragPhase.INSERTION) 0.45f else 1f },
+                    .graphicsLayer {
+                        alpha = if (dragFeedback.phase == LorebookDragPhase.INSERTION) 0.45f else 1f
+                        scaleX = if (longPressDrag && state.pointer != null) 0.98f else 1f
+                        scaleY = scaleX
+                    },
             ) {
                 content(handleModifier)
             }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                TextButton(onClick = { onInsertAtEdge(false) }) { Text("插入最前") }
-                TextButton(onClick = { onInsertAtEdge(true) }) { Text("插入最后") }
-                TextButton(onClick = onCancel) { Text("取消待插入") }
+                TextButton(onClick = { onInsertAtEdge(false) }, enabled = enabled) { Text("插入最前") }
+                TextButton(onClick = { onInsertAtEdge(true) }, enabled = enabled) { Text("插入最后") }
+                TextButton(onClick = onCancel, enabled = state.pointer == null) { Text("取消待插入") }
             }
         }
     }

@@ -19,4 +19,10 @@ class PromptVM(
             settingsStore.update(fn)
         }
     }
+
+    private val lorebookBatchWriter = LorebookBatchWriter { transform ->
+        settingsStore.update { latest -> latest.copy(lorebooks = transform(latest.lorebooks)) }
+    }
+
+    internal suspend fun commitLorebookBatch(request: LorebookBatchRequest) = lorebookBatchWriter.commit(request)
 }

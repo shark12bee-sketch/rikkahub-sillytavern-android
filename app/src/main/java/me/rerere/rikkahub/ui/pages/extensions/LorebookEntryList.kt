@@ -53,6 +53,12 @@ internal fun LorebookEntryList(
     onInsertPendingAtEdge: (Boolean) -> Unit,
     onUpdatePending: (PromptInjection.RegexInjection) -> Unit,
     modifier: Modifier = Modifier,
+    batch: LorebookBatchPreview? = null,
+    selectedIds: Set<Uuid>? = null,
+    onSelectEntry: (Uuid) -> Unit = {},
+    onRemoveBatchEntry: (Uuid) -> Unit = {},
+    onCommitBatch: (LorebookEntryPlacement?, Boolean?) -> Unit = { _, _ -> },
+    batchEnabled: Boolean = true,
     header: @Composable () -> Unit,
     onEntriesChange: (List<PromptInjection.RegexInjection>) -> Unit,
     onEditEntry: (PromptInjection.RegexInjection) -> Unit,
@@ -63,16 +69,20 @@ internal fun LorebookEntryList(
     var expandedGroups by rememberSaveable(book.id.toString()) { mutableStateOf(emptyList<String>()) }
     var draggingGroup by remember { mutableStateOf<String?>(null) }
     var insertionId by remember { mutableStateOf<Uuid?>(null) }
-    val insertion = remember(book.id, pendingEntry?.id) { LorebookInsertionState() }
+    val movingIds = if (batch?.mode == LorebookBatchMode.MOVE) batch.entries.map { it.id }.toSet() else emptySet()
+    val visibleEntries = book.entries.filterNot { it.id in movingIds }
+    val hasPending = pendingEntry != null || batch != null
+    val taskActive = hasPending || selectedIds != null
+    val insertion = remember(book.id, pendingEntry?.id, batch?.id) { LorebookInsertionState() }
     var listBounds by remember { mutableStateOf<LorebookDragBounds?>(null) }
-    val currentBook by rememberUpdatedState(book)
-    val currentPending by rememberUpdatedState(pendingEntry)
+    val currentGroup by rememberUpdatedState(pendingEntry?.group ?: batch?.group.orEmpty())
+    val currentVisible by rememberUpdatedState(visibleEntries)
     val edge = with(LocalDensity.current) { 64.dp.toPx() }
     val maxScrollVelocity = with(LocalDensity.current) { 720.dp.toPx() }
     val listState = rememberLazyListState()
     val feedback by remember(insertion, edge, maxScrollVelocity) {
         derivedStateOf {
-            val entries = currentBook.entries.associateBy { it.id.toString() }
+            val entries = currentVisible.associateBy { it.id.toString() }
             val targets = listState.layoutInfo.visibleItemsInfo.mapNotNull { item ->
                 entries[item.key]?.let { entry ->
                     val top = (listBounds?.top ?: 0f) + item.offset
@@ -84,7 +94,7 @@ internal fun LorebookEntryList(
                 safety = insertion.safetyBounds,
                 viewport = listBounds,
                 targets = targets,
-                group = currentPending?.group.orEmpty(),
+                group = currentGroup,
                 edgeSize = edge,
                 maxScrollVelocity = maxScrollVelocity,
                 canScrollBackward = listState.canScrollBackward,
@@ -106,14 +116,14 @@ internal fun LorebookEntryList(
             if (velocity != 0f) listState.scrollBy(velocity * seconds)
         }
     }
-    LaunchedEffect(pendingEntry?.id) {
-        pendingEntry?.let { expandedGroups = (expandedGroups + it.group).distinct() }
+    LaunchedEffect(pendingEntry?.id, batch?.id, currentGroup) {
+        if (hasPending) expandedGroups = (expandedGroups + currentGroup).distinct()
     }
 
     val reorderState = rememberReorderableLazyListState(listState) { from, to ->
         val fromId = book.entries.firstOrNull { it.id.toString() == from.key }?.id
         val toId = book.entries.firstOrNull { it.id.toString() == to.key }?.id
-        if (pendingEntry == null && fromId != null && toId != null) {
+        if (!taskActive && fromId != null && toId != null) {
             val reordered = moveLorebookEntry(book.entries, fromId, toId)
             if (reordered != book.entries) {
                 insertionId = fromId
@@ -126,17 +136,21 @@ internal fun LorebookEntryList(
         val safetyHeightLimit = maxHeight * 0.55f
         Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             // Reserve at least 45% for the independent list, even with large text or an expanded editor.
-            if (pendingEntry != null) {
+            if (hasPending) {
                 LorebookInsertionSafetyArea(
                     state = insertion,
                     feedback = { feedback },
                     modifier = Modifier.heightIn(max = safetyHeightLimit).testTag("lorebook-insertion-safety-area"),
-                    title = "待插入 · ${pendingEntry.group.ifBlank { "未分组" }}",
-                    onConfirm = onInsertPending,
+                    title = if (batch != null) "${batch.mode.label} · ${batch.entries.size} 条 · ${batch.group.ifBlank { "未分组" }}"
+                        else "待插入 · ${pendingEntry?.group?.ifBlank { "未分组" }}",
+                    onConfirm = { if (batch != null) onCommitBatch(it, null) else onInsertPending(it) },
+                    longPressDrag = batch != null,
+                    enabled = batchEnabled,
                     onCancel = onCancelPending,
-                    onInsertAtEdge = onInsertPendingAtEdge,
+                    onInsertAtEdge = { if (batch != null) onCommitBatch(null, it) else onInsertPendingAtEdge(it) },
                 ) { handleModifier ->
-                    NewLorebookEntryPreview(
+                    if (batch != null) LorebookBatchPreviewContent(batch, handleModifier, onRemoveBatchEntry, batchEnabled)
+                    else if (pendingEntry != null) NewLorebookEntryPreview(
                         entry = pendingEntry,
                         handleModifier = handleModifier,
                         onEdit = { onEditEntry(pendingEntry) },
@@ -153,7 +167,7 @@ internal fun LorebookEntryList(
             ) {
                 // During insertion, keep the existing entries in view instead of book metadata.
                 // The draft is unchanged; the fields return as soon as insertion is resolved.
-                if (pendingEntry == null) item(key = "book-fields") {
+                if (!taskActive) item(key = "book-fields") {
                     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) { header() }
                 }
                 item(key = "entry-controls") {
@@ -162,10 +176,10 @@ internal fun LorebookEntryList(
                         TextButton(onClick = { collapsed = !collapsed }) {
                             Text(if (collapsed) "展开条目" else "折叠条目")
                         }
-                        TextButton(onClick = { onAddEntry("") }, enabled = pendingEntry == null) { Text("新增") }
+                        TextButton(onClick = { onAddEntry("") }, enabled = !taskActive) { Text("新增") }
                     }
                 }
-                val grouped = book.entries.groupBy { it.group }
+                val grouped = visibleEntries.groupBy { it.group }
                 val groups = grouped.keys.filter { it.isNotBlank() } + grouped.keys.filter { it.isBlank() }
                 groups.forEachIndexed { index, group ->
                     val entries = grouped.getValue(group)
@@ -181,9 +195,9 @@ internal fun LorebookEntryList(
                                 expandedGroups = if (expanded) expandedGroups - group else expandedGroups + group
                             },
                             onGroupSettings = { onGroupSettings(group, entries) },
-                            onAddEntry = { if (pendingEntry == null) onAddEntry(group) },
-                            canAddEntry = pendingEntry == null,
-                            canEditGroup = pendingEntry == null,
+                            onAddEntry = { if (!taskActive) onAddEntry(group) },
+                            canAddEntry = !taskActive,
+                            canEditGroup = !taskActive,
                         )
                     }
                     if (expanded) items(entries, key = { it.id.toString() }) { entry ->
@@ -197,11 +211,21 @@ internal fun LorebookEntryList(
                                     RegexInjectionEntryCard(
                                         entry = entry,
                                         collapsed = collapsed,
+                                        selection = {
+                                            if (selectedIds != null) {
+                                            val ids = selectedIds
+                                            val selectedGroup = book.entries.firstOrNull { it.id in ids }?.group
+                                            LorebookEntrySelection(
+                                                entry.id in ids, selectedGroup == null || entry.group == selectedGroup,
+                                                entry.name, { onSelectEntry(entry.id) },
+                                            )
+                                            }
+                                        },
                                         dragHandle = {
                                             LorebookDragHandle(
                                                 description = "拖动排序 ${entry.name}",
                                                 modifier = Modifier.draggableHandle(
-                                                    enabled = pendingEntry == null,
+                                                    enabled = !taskActive,
                                                     onDragStarted = { draggingGroup = group },
                                                     onDragStopped = { draggingGroup = null; insertionId = null },
                                                 ),
@@ -235,7 +259,9 @@ internal fun LorebookEntryList(
                         }
                     }
                 }
-                if (book.entries.isEmpty()) item(key = "empty") { Text("暂无条目") }
+                if (visibleEntries.isEmpty()) item(key = "empty") {
+                    Text(if (hasPending) "此分组可使用快捷按钮插入首条条目" else "暂无条目")
+                }
             }
         }
     }
