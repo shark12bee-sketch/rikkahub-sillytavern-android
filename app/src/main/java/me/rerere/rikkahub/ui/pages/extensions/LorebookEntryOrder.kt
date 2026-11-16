@@ -3,21 +3,17 @@ package me.rerere.rikkahub.ui.pages.extensions
 import me.rerere.rikkahub.data.model.PromptInjection
 import kotlin.uuid.Uuid
 
-/** Move only this group's slots; entries in other groups keep their absolute positions. */
+/** A single drop commits once using the same group-aware insertion planner as staged batches. */
 internal fun moveLorebookEntry(
     entries: List<PromptInjection.RegexInjection>,
     fromId: Uuid,
-    toId: Uuid,
+    placement: LorebookEntryPlacement,
 ): List<PromptInjection.RegexInjection> {
-    val from = entries.firstOrNull { it.id == fromId } ?: return entries
-    val to = entries.firstOrNull { it.id == toId } ?: return entries
-    if (from.group.ifBlank { "" } != to.group.ifBlank { "" } || fromId == toId) return entries
-    val group = entries.filter { it.group.ifBlank { "" } == from.group.ifBlank { "" } }.toMutableList()
-    val target = group.indexOfFirst { it.id == toId }
-    group.remove(from)
-    group.add(target, from)
-    val iterator = group.iterator()
-    return entries.map { if (it.group.ifBlank { "" } == from.group.ifBlank { "" }) iterator.next() else it }
+    val entry = entries.firstOrNull { it.id == fromId } ?: return entries
+    if (placement.targetId == fromId) return entries
+    val destination = if (placement.group == entry.group.ifBlank { "" }) placement.copy(group = entry.group) else placement
+    return runCatching { insertLorebookBatch(entries.filterNot { it.id == fromId }, listOf(entry), destination, null) }
+        .getOrDefault(entries)
 }
 
 internal data class LorebookEntryPlacement(val targetId: Uuid?, val after: Boolean, val group: String? = null) {

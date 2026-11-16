@@ -32,18 +32,31 @@ internal fun evaluateLorebookEntryDrag(
     maxScrollVelocity: Float,
     canScrollBackward: Boolean,
     canScrollForward: Boolean,
+    previous: LorebookEntryPlacement? = null,
+    switchThreshold: Float = 0f,
+    draggedEntryId: Uuid? = null,
 ): LorebookDragFeedback {
     if (pointer == null) return LorebookDragFeedback(LorebookDragPhase.IDLE)
     if (safety?.contains(pointer) == true) return LorebookDragFeedback(LorebookDragPhase.SAFE)
     if (viewport == null || !viewport.contains(pointer)) return LorebookDragFeedback(LorebookDragPhase.OUTSIDE)
 
     val visible = targets.filter { it.bottom > viewport.top && it.top < viewport.bottom }
-    val target = visible.firstOrNull { pointer.y >= it.top && pointer.y < it.bottom }
-        ?: visible.minByOrNull { minOf(abs(pointer.y - it.top), abs(pointer.y - it.bottom)) }
-    val placement = target?.let {
-        if (it.id == null) LorebookEntryPlacement.groupEdge(it.group, false)
-        else LorebookEntryPlacement(it.id, after = pointer.y > (it.top + it.bottom) / 2f,
-            group = it.group)
+    val hit = visible.firstOrNull { pointer.y >= it.top && pointer.y < it.bottom }
+    val target = hit ?: visible.filterNot { draggedEntryId != null && it.id == draggedEntryId }
+        .minByOrNull { minOf(abs(pointer.y - it.top), abs(pointer.y - it.bottom)) }
+    val placement = target?.takeUnless { draggedEntryId != null && it.id == draggedEntryId }?.let {
+        if (it.id == null) LorebookEntryPlacement.groupEdge(it.group, true)
+        else {
+            val midpoint = (it.top + it.bottom) / 2f
+            val margin = switchThreshold.coerceIn(0f, (it.bottom - it.top) * 0.15f)
+            val same = previous != null && previous.targetId == it.id && previous.group == it.group
+            val after = when {
+                same && previous?.after == true -> pointer.y >= midpoint - margin
+                same -> pointer.y > midpoint + margin
+                else -> pointer.y > midpoint
+            }
+            LorebookEntryPlacement(it.id, after, it.group)
+        }
     }
     // Prevent overlapping edge bands in a short viewport. Speed is distance-based, in px/second.
     val edge = edgeSize.coerceIn(0f, (viewport.bottom - viewport.top) / 3f)

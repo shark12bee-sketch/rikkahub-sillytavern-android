@@ -17,7 +17,7 @@ class LorebookEntryGroupsTest {
         val inserted = insertLorebookEntry(original, fresh, LorebookEntryPlacement.groupEdge("", false))
         assertEquals(listOf(fresh, whitespace, plain), inserted)
         assertEquals("  ", inserted[1].group)
-        val reordered = moveLorebookEntry(original, whitespace.id, plain.id)
+        val reordered = moveLorebookEntry(original, whitespace.id, LorebookEntryPlacement(plain.id, true, ""))
         assertEquals(listOf(plain, whitespace), reordered)
         assertEquals(original.associateBy { it.id }, reordered.associateBy { it.id })
     }
@@ -108,7 +108,7 @@ class LorebookEntryGroupsTest {
         fun feedback(y: Float) = evaluateLorebookEntryDrag(LorebookDragPoint(100f, y), safety, viewport,
             listOf(LorebookDropTarget(null, "Empty", 110f, 150f), LorebookDropTarget(entries[1].id, "B", 160f, 250f)),
             50f, 720f, true, true)
-        assertEquals(LorebookEntryPlacement.groupEdge("Empty", false), feedback(130f).placement)
+        assertEquals(LorebookEntryPlacement.groupEdge("Empty", true), feedback(130f).placement)
         assertEquals(LorebookEntryPlacement(entries[1].id, true, "B"), feedback(240f).placement)
         assertNull(feedback(50f).placement)
         assertEquals(0f, feedback(50f).scrollVelocity, 0f)

@@ -130,14 +130,13 @@ class LorebookEntryGroupsUiTest {
         }
     }
 
-    @Test fun mixedSelectionMovesToChosenGroupOnlyAfterConfirmationAndCanReturnToUngrouped() {
+    @Test fun scopedSelectionMovesToChosenGroupOnlyAfterConfirmationAndCanReturnToUngrouped() {
         showSheet()
         fun select() {
             compose.onNodeWithText("批量管理条目").performClick()
             compose.onNodeWithText("移动到本书其他位置").performClick()
-            for ((group, name) in listOf("A" to "Alpha", "B" to "Beta")) {
-                compose.onNodeWithTag("lorebook-entry-list").performScrollToNode(hasText(group))
-                compose.onNodeWithText(group).performClick()
+            compose.onNode(hasText("A") and hasClickAction()).performClick()
+            for (name in listOf("Alpha", "Anchor")) {
                 compose.onNodeWithTag("lorebook-entry-list").performScrollToNode(hasContentDescription("选择条目 $name"))
                 compose.onNodeWithContentDescription("选择条目 $name").performClick()
             }
@@ -151,7 +150,7 @@ class LorebookEntryGroupsUiTest {
         compose.onNodeWithText("移入分组").performClick()
         compose.onNodeWithText("确认移动").performClick()
         compose.runOnIdle {
-            assertEquals(listOf(anchor, alpha.copy(group = "Empty"), beta.copy(group = "Empty")), stored.entries)
+            assertEquals(listOf(beta, alpha.copy(group = "Empty"), anchor.copy(group = "Empty")), stored.entries)
             assertEquals(listOf("A", "B", "Empty"), stored.entryGroups)
         }
         compose.onNodeWithText("批量管理条目").performClick()

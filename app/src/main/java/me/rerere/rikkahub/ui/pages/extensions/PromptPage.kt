@@ -1371,6 +1371,7 @@ internal fun LorebookEditSheet(
     var selectionMode by rememberSaveable(book.id.toString()) { mutableStateOf(LorebookBatchMode.MOVE.name) }
     var showGroupManagement by remember { mutableStateOf(false) }
     var groupMoveConfirmation by remember { mutableStateOf<LorebookBatchRequest?>(null) }
+    var deleteConfirmation by remember { mutableStateOf<LorebookBatchRequest?>(null) }
     var copyConfirmation by remember { mutableStateOf<LorebookBatchRequest?>(null) }
     var selectedStrings by rememberSaveable(book.id.toString()) { mutableStateOf(emptyList<String>()) }
     var movingStrings by rememberSaveable(book.id.toString()) { mutableStateOf(emptyList<String>()) }
@@ -1416,10 +1417,14 @@ internal fun LorebookEditSheet(
                     selecting = false
                     selectedStrings = emptyList()
                 }
+                if (action is LorebookBatchAction.Delete) {
+                    selectedStrings = emptyList()
+                    selecting = false
+                }
             } catch (cancelled: kotlinx.coroutines.CancellationException) {
                 throw cancelled
             } catch (failure: Exception) {
-                batchError = "保存失败：${failure.message ?: "请重试"}；暂存条目仍保留"
+                batchError = "保存失败：${failure.message ?: "请重试"}；${if (request.action is LorebookBatchAction.Delete) "选择仍保留" else "暂存条目仍保留"}"
             } finally {
                 savingBatch = false
             }
@@ -1514,6 +1519,7 @@ internal fun LorebookEditSheet(
                     Text("批量管理条目")
                 }
                 DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
+                    DropdownMenuItem(text = { Text("删除条目") }, onClick = { menuExpanded = false; selectionMode = LorebookBatchMode.DELETE.name; selecting = true })
                     DropdownMenuItem(text = { Text("移动到本书其他位置") }, onClick = { menuExpanded = false; selectionMode = LorebookBatchMode.MOVE.name; selecting = true })
                     DropdownMenuItem(
                         text = { Text("复制到其他世界书") },
@@ -1529,7 +1535,10 @@ internal fun LorebookEditSheet(
                 onDone = {
                     val ordered = orderedLorebookSelection(book.entries, selectedIds)
                     try {
-                        if (selectionMode == LorebookBatchMode.COPY.name) checkNotNull(onStageCopy).invoke(ordered)
+                        if (selectionMode == LorebookBatchMode.DELETE.name) {
+                            deleteConfirmation = LorebookBatchRequest(book, baseline, LorebookBatchAction.Delete(ordered.map { it.id }.toSet()))
+                            return@LorebookSelectionControls
+                        } else if (selectionMode == LorebookBatchMode.COPY.name) checkNotNull(onStageCopy).invoke(ordered)
                         else {
                             movingStrings = ordered.map { it.id.toString() }
                             batchToken = Uuid.random()
@@ -1542,6 +1551,7 @@ internal fun LorebookEditSheet(
                 },
                 onCancel = ::cancelBatch,
                 groups = lorebookEntryGroupNames(book),
+                enabled = !savingBatch && !copyBusy,
                 onMoveToGroup = { group ->
                     val ids = selectedStrings.map { Uuid.parse(it) }.toSet()
                     if (ids.isNotEmpty()) groupMoveConfirmation = LorebookBatchRequest(book, baseline,
@@ -1560,7 +1570,8 @@ internal fun LorebookEditSheet(
                     // Multiple taps can arrive before recomposition; read the live selection.
                     val latestIds = selectedStrings.map { Uuid.parse(it) }.toSet()
                     val entry = book.entries.firstOrNull { it.id == id }
-                    if (entry != null) {
+                    val selectedGroup = book.entries.firstOrNull { it.id in latestIds }?.group?.ifBlank { "" }
+                    if (!savingBatch && !copyBusy && entry != null && (id in latestIds || selectedGroup == null || entry.group.ifBlank { "" } == selectedGroup)) {
                         selectedStrings = (if (id in latestIds) latestIds - id else latestIds + id).map(Uuid::toString)
                     }
                 },
@@ -1659,6 +1670,13 @@ internal fun LorebookEditSheet(
         )
     }
 
+    deleteConfirmation?.let { request ->
+        val count = (request.action as LorebookBatchAction.Delete).ids.size
+        AlertDialog(onDismissRequest = { deleteConfirmation = null }, title = { Text("确认删除所选") },
+            text = { Text("将删除 $count 条条目，未选中的条目和独立分组将保留。") },
+            confirmButton = { TextButton(onClick = { deleteConfirmation = null; executeBatch(request) }) { Text("确认删除") } },
+            dismissButton = { TextButton(onClick = { deleteConfirmation = null }) { Text("取消删除") } })
+    }
     if (showGroupManagement) LorebookGroupManagement(book, onEdit, { showGroupManagement = false })
     groupMoveConfirmation?.let { request ->
         val count = (request.action as LorebookBatchAction.Move).ids.size

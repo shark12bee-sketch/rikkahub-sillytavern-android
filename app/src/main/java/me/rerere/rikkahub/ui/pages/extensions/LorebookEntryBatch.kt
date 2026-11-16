@@ -10,6 +10,7 @@ import kotlin.uuid.Uuid
 
 internal sealed interface LorebookBatchAction {
     data class Move(val ids: Set<Uuid>) : LorebookBatchAction
+    data class Delete(val ids: Set<Uuid>) : LorebookBatchAction
     data class Copy(
         val task: LorebookCopyTask,
         val ids: Set<Uuid> = task.entries.map { it.id }.toSet(),
@@ -70,6 +71,12 @@ internal fun applyLorebookBatch(books: List<Lorebook>, request: LorebookBatchReq
     val current = books.firstOrNull { it.id == request.draft.id }
     require(current == request.expected) { "目标世界书已被修改，请重新打开后选择落点；暂存条目仍保留" }
     val entries = when (val action = request.action) {
+        is LorebookBatchAction.Delete -> {
+            require(action.ids.isNotEmpty() && request.draft.entries.count { it.id in action.ids } == action.ids.size) {
+                "删除选择已改变，请重新选择条目"
+            }
+            request.draft.entries.filterNot { it.id in action.ids }
+        }
         is LorebookBatchAction.Move -> {
             val selected = orderedLorebookSelection(request.draft.entries, action.ids)
             require(selected.size == action.ids.size) { "选中的条目已删除，请取消并重新选择" }

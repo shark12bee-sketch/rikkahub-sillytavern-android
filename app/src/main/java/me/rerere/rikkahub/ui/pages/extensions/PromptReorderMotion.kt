@@ -15,6 +15,12 @@ internal fun Modifier.promptReorderLift(dragging: Boolean): Modifier {
 
 internal const val PromptDraggingScale = 1.05f
 
+@Composable
+internal fun Modifier.promptDragPlaceholder(lifted: Boolean): Modifier {
+    val alpha by animateFloatAsState(if (lifted) 0.25f else 1f, label = "prompt_drag_placeholder")
+    return graphicsLayer { this.alpha = alpha }
+}
+
 /** Same default spring and scale family as the existing reorder lift, without changing measurement. */
 @Composable
 internal fun PromptPendingEntrance(key: Any, content: @Composable () -> Unit) {

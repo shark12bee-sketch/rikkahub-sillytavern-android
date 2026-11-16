@@ -7,6 +7,35 @@ import org.junit.Test
 import kotlin.uuid.Uuid
 
 class LorebookEntryDragTest {
+    @Test fun `midpoint hysteresis rejects jitter but large reverse movements switch immediately`() {
+        fun at(y: Float, previous: LorebookEntryPlacement?) = evaluateLorebookEntryDrag(
+            LorebookDragPoint(100f, y), null, viewport, listOf(first), 64f, 720f, false, false,
+            previous = previous, switchThreshold = 8f).placement
+        val before = LorebookEntryPlacement(first.id, false, "A")
+        assertEquals(before, at(263f, before))
+        val after = checkNotNull(at(270f, before))
+        assertTrue(after.after)
+        assertEquals(after, at(257f, after))
+        assertEquals(before, at(250f, after))
+    }
+
+    @Test fun `own placeholder is neutral while group header always appends`() {
+        val own = evaluateLorebookEntryDrag(LorebookDragPoint(100f, 250f), null, viewport,
+            listOf(first, otherGroup), 64f, 720f, false, false, draggedEntryId = first.id)
+        assertNull(own.placement)
+        val header = evaluateLorebookEntryDrag(LorebookDragPoint(100f, 250f), null, viewport,
+            listOf(LorebookDropTarget(null, "B", 220f, 280f)), 64f, 720f, false, false)
+        assertEquals(LorebookEntryPlacement.groupEdge("B", true), header.placement)
+    }
+
+    @Test fun `large jumps select the current group and safety clears even a remembered target`() {
+        val previous = LorebookEntryPlacement(first.id, true, "A")
+        val jump = evaluateLorebookEntryDrag(LorebookDragPoint(100f, 380f), safety, viewport,
+            listOf(first, otherGroup), 64f, 720f, true, true, previous, 8f)
+        assertEquals("B", jump.placement?.group)
+        assertPaused(evaluateLorebookEntryDrag(LorebookDragPoint(100f, 100f), safety, viewport,
+            listOf(first), 64f, 720f, true, true, previous, 8f), LorebookDragPhase.SAFE)
+    }
     private val safety = LorebookDragBounds(0f, 0f, 300f, 200f)
     private val viewport = LorebookDragBounds(0f, 200f, 300f, 800f)
     private val first = LorebookDropTarget(Uuid.random(), "A", 220f, 300f)

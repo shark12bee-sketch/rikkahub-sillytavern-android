@@ -40,6 +40,7 @@ internal class LorebookInsertionState {
     var previewBounds by mutableStateOf<Rect?>(null)
     var previewWindow by mutableStateOf(LorebookThumbnailWindow())
     var drag by mutableStateOf<LorebookInsertionDrag?>(null)
+    var previousPlacement by mutableStateOf<LorebookEntryPlacement?>(null)
 }
 
 /**
@@ -110,9 +111,7 @@ internal fun LorebookInsertionSafetyArea(
             val previewModifier = if (compact) Modifier else Modifier.weight(1f, fill = false)
                 .verticalScroll(rememberScrollState())
             Box(
-                previewModifier.onGloballyPositioned { if (!compact) state.previewBounds = it.boundsInRoot() }.graphicsLayer {
-                        alpha = if (!compact && state.drag != null) 0.25f else 1f
-                    },
+                previewModifier.onGloballyPositioned { if (!compact) state.previewBounds = it.boundsInRoot() }.promptDragPlaceholder(!compact && state.drag?.released == false),
             ) {
                 content(handleModifier) { id, onTap ->
                     if (enabled) lorebookInsertionHandle(state, true, true, feedback,
