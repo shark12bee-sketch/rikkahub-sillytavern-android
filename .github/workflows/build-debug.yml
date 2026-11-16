@@ -79,7 +79,21 @@ jobs:
           profile: pixel_2
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
-          script: ./gradlew :app:connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=me.rerere.rikkahub.ui.pages.extensions.LorebookEntryLayoutTest,me.rerere.rikkahub.ui.pages.extensions.LorebookEntryBatchUiTest,me.rerere.rikkahub.ui.pages.extensions.LorebookEntryCopyUiTest -x :web:buildWebUi --stacktrace
+          script: ./gradlew :app:connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.package=me.rerere.rikkahub.ui.pages.extensions -x :web:buildWebUi --stacktrace
+      - name: Verify all editor UI test classes executed
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import xml.etree.ElementTree as ET
+          cases = [case for file in Path('app/build/outputs/androidTest-results').rglob('TEST-*.xml')
+                   for case in ET.parse(file).getroot().iter('testcase')]
+          expected = {'LorebookEntryLayoutTest': 6, 'LorebookEntryBatchUiTest': 3, 'LorebookEntryCopyUiTest': 2}
+          for name, count in expected.items():
+              executed = [case for case in cases if case.attrib.get('classname', '').endswith('.' + name)]
+              assert len(executed) == count, (name, len(executed), count)
+              assert all(case.find('skipped') is None for case in executed), name
+              print(name, len(executed), 'executed')
+          PY
       - uses: actions/upload-artifact@v4
         if: always()
         with:
