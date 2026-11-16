@@ -11,10 +11,15 @@ permissions:
 jobs:
   build-debug:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        kind: [feature, upstream]
     steps:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
+          ref: ${{ matrix.kind == 'upstream' && '5ddb264b72f00c9c747d3b72bf58560ea3338a27' || 'ci/lorebook-entry-editor' }}
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -24,6 +29,8 @@ jobs:
           python-version: '3.12'
       - uses: ./.github/actions/setup-android-native
       - uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-read-only: false
       - name: Prepare unsigned debug-only verification
         run: |
           python - <<'PY'
@@ -40,24 +47,36 @@ jobs:
           crypto.write_text(text.replace(old, old + '\n        check(!BuildConfig.DEBUG) { "Encrypted plugins unavailable in unsigned CI debug builds" }'))
           PY
           chmod +x gradlew
-      - name: Test lorebook editing and prompt injection
+      - name: Test lorebook entry editor
+        if: matrix.kind == 'feature'
         run: |
           set -o pipefail
           ./gradlew :app:testDebugUnitTest \
             --tests 'me.rerere.rikkahub.ui.pages.extensions.LorebookEntryOrderTest' \
+            -x :web:buildWebUi --stacktrace 2>&1 | tee editor-test.log
+          cp -r app/build/test-results/testDebugUnitTest editor-test-results
+      - name: Compare existing prompt injection tests
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          ./gradlew :app:testDebugUnitTest \
             --tests 'me.rerere.rikkahub.data.ai.transformers.PromptInjectionTransformerTest' \
             -x :web:buildWebUi --stacktrace 2>&1 | tee test.log
       - name: Build debug APK
+        if: matrix.kind == 'feature'
         run: ./gradlew assembleDebug -x :web:buildWebUi --stacktrace
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: lorebook-entry-editor-test-results
+          name: lorebook-entry-editor-test-results-${{ matrix.kind }}
           path: |
             app/build/test-results/testDebugUnitTest/
             app/build/reports/tests/testDebugUnitTest/
             test.log
+            editor-test.log
+            editor-test-results/
       - uses: actions/upload-artifact@v4
+        if: matrix.kind == 'feature' && success()
         with:
           name: lorebook-entry-editor-debug
           path: app/build/outputs/apk/debug/*.apk
