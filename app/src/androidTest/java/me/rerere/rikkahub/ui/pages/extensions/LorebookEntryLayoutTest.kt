@@ -21,6 +21,7 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollToNode
+import androidx.compose.ui.test.isToggleable
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.unit.dp
@@ -76,6 +77,7 @@ class LorebookEntryLayoutTest {
 
     @Test
     fun handleIsTheRightmostIndependent48dpTargetInBothCardModes() {
+        var entry by mutableStateOf(pending)
         var collapsed by mutableStateOf(false)
         var edited = 0
         var deleted = 0
@@ -85,9 +87,9 @@ class LorebookEntryLayoutTest {
             MaterialTheme {
                 Box(Modifier.fillMaxWidth().testTag("card")) {
                     RegexInjectionEntryCard(
-                        pending, collapsed,
+                        entry, collapsed,
                         dragHandle = { LorebookDragHandle("Handle") },
-                        onEdit = { edited++ }, onDelete = { deleted++ },
+                        onEdit = { edited++ }, onDelete = { deleted++ }, onUpdate = { entry = it },
                     )
                 }
             }
@@ -102,6 +104,8 @@ class LorebookEntryLayoutTest {
             assertTrue(card.right - handle.right <= 4f * density + 1f)
             assertTrue(delete.fetchSemanticsNode().boundsInRoot.right <= handle.left)
             assertTrue(edit.fetchSemanticsNode().boundsInRoot.right <= delete.fetchSemanticsNode().boundsInRoot.left)
+            compose.onNode(isToggleable()).performClick()
+            compose.runOnIdle { assertEquals(it == 1, entry.enabled) }
             edit.performClick()
             delete.performClick()
             compose.runOnIdle { collapsed = true }

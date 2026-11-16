@@ -1552,7 +1552,13 @@ internal fun LorebookEditSheet(
                 batch = activeBatch,
                 selectedIds = if (selecting) selectedIds else null,
                 onSelectEntry = { id ->
-                    selectedStrings = (if (id in selectedIds) selectedIds - id else selectedIds + id).map(Uuid::toString)
+                    // Multiple taps can arrive before recomposition; read the live selection.
+                    val latestIds = selectedStrings.map { Uuid.parse(it) }.toSet()
+                    val group = book.entries.firstOrNull { it.id in latestIds }?.group
+                    val entry = book.entries.firstOrNull { it.id == id }
+                    if (entry != null && (group == null || group == entry.group)) {
+                        selectedStrings = (if (id in latestIds) latestIds - id else latestIds + id).map(Uuid::toString)
+                    }
                 },
                 onRemoveBatchEntry = { id ->
                     if (!savingBatch && !copyBusy) {
