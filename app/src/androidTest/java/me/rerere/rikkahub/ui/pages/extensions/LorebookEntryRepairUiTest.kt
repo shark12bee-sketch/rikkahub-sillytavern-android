@@ -74,24 +74,53 @@ class LorebookEntryRepairUiTest {
         compose.waitForIdle()
     }
 
-    @Test fun firstCheckedGroupRestoresSelectAllScopeAndUngroupedCanChooseItsOwnScope() {
+    private fun chooseScope(group: String) {
+        compose.onNodeWithTag("lorebook-selection-scope").performClick()
+        compose.onNodeWithText("组内：${group.ifBlank { "未分组" }}").performClick()
+    }
+
+    @Test fun explicitScopeStaysIndependentAcrossManualCrossGroupSelectionAndScopedToggles() {
         showSheet()
         begin("移动到本书其他位置")
+        fun scope(group: String) = compose.onNodeWithText("全选范围：$group").assertIsDisplayed()
+        fun count(n: Int) = compose.onNodeWithText("批量移动 · 已选 $n 条").assertIsDisplayed()
+        scope("未分组")
         expand("A")
         select("Alpha")
-        compose.onNodeWithText("全选范围：A", substring = true).assertIsDisplayed()
-        compose.onNodeWithText("全选该组").performClick()
-        compose.onNodeWithText("批量移动 · 已选 2 条").assertIsDisplayed()
-        expand("B")
-        compose.onNodeWithContentDescription("选择条目 Anchor").assertIsNotEnabled()
-        compose.onNodeWithText("取消全选").performClick()
-        select("Loose")
-        compose.onNodeWithText("全选范围：未分组", substring = true).assertIsDisplayed()
-        compose.onNodeWithText("取消全选").performClick()
         select("Beta")
-        compose.onNodeWithText("全选范围：A", substring = true).assertIsDisplayed()
-        compose.runOnIdle { assertEquals(original, stored) }
-        captureLorebookRepairEvidence("selection-scope")
+        scope("未分组"); count(2)
+        expand("B")
+        select("Anchor")
+        scope("未分组"); count(3)
+        select("Beta")
+        count(2)
+        compose.onNodeWithText("全选该组").performClick()
+        count(3) // Adds only Loose; keeps Alpha and Anchor.
+        compose.onNodeWithText("取消全选").performClick()
+        count(2)
+        chooseScope("A")
+        scope("A"); count(2)
+        compose.onNodeWithText("全选该组").performClick()
+        count(3)
+        select("Alpha")
+        scope("A"); count(2)
+        compose.onNodeWithText("全选该组").performClick()
+        compose.onNodeWithText("取消全选").performClick()
+        count(1) // Removes A only; Anchor in B remains selected.
+        select("Anchor")
+        scope("A"); count(0)
+        chooseScope("B")
+        select("Alpha")
+        scope("B"); count(1)
+        select("Anchor")
+        scope("B"); count(2)
+        compose.onNodeWithText("完成选择").assertIsEnabled()
+        compose.runOnIdle { assertEquals(original, stored); assertEquals(original, draft) }
+        captureLorebookRepairEvidence("independent-selection-scope")
+        compose.onNodeWithText("完成选择").performClick()
+        compose.onNodeWithText("批量移动 · 已选 2 条").assertIsDisplayed()
+        compose.onNodeWithText("取消待插入").performClick()
+        compose.runOnIdle { assertEquals(original, stored); assertEquals(original, draft) }
     }
 
     @Test fun partialDeleteRequiresConfirmationAndCancelLeavesEveryEntryUntouched() {
@@ -118,6 +147,7 @@ class LorebookEntryRepairUiTest {
     @Test fun deletingWholeSelectedGroupKeepsEmptyGroupAndSurvivesReopen() {
         showSheet()
         begin("删除条目")
+        chooseScope("A")
         compose.onNodeWithText("全选该组").performClick()
         compose.onNodeWithText("批量删除 · 已选 2 条").assertIsDisplayed()
         compose.onNodeWithText("删除所选").performClick()

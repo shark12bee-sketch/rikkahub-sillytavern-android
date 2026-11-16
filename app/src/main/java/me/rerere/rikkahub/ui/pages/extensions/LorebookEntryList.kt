@@ -261,9 +261,8 @@ internal fun LorebookEntryList(
                                     collapsed = collapsed,
                                     selection = {
                                         if (selectedIds != null) {
-                                            val selectedGroup = book.entries.firstOrNull { it.id in selectedIds }?.group?.ifBlank { "" }
                                             LorebookEntrySelection(entry.id in selectedIds,
-                                                !batchBusy && (entry.id in selectedIds || selectedGroup == null || group == selectedGroup),
+                                                !batchBusy,
                                                 entry.name, { onSelectEntry(entry.id) })
                                         }
                                     },

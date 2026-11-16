@@ -1570,8 +1570,7 @@ internal fun LorebookEditSheet(
                     // Multiple taps can arrive before recomposition; read the live selection.
                     val latestIds = selectedStrings.map { Uuid.parse(it) }.toSet()
                     val entry = book.entries.firstOrNull { it.id == id }
-                    val selectedGroup = book.entries.firstOrNull { it.id in latestIds }?.group?.ifBlank { "" }
-                    if (!savingBatch && !copyBusy && entry != null && (id in latestIds || selectedGroup == null || entry.group.ifBlank { "" } == selectedGroup)) {
+                    if (!savingBatch && !copyBusy && entry != null) {
                         selectedStrings = (if (id in latestIds) latestIds - id else latestIds + id).map(Uuid::toString)
                     }
                 },
