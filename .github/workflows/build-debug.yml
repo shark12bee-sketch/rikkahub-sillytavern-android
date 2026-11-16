@@ -7,6 +7,10 @@ on:
         description: 'Optional class#method for focused UI evidence; empty runs full regression'
         type: string
         default: ''
+      selection_regression:
+        description: 'Run focused selection state regression and lorebook units'
+        type: boolean
+        default: false
   push:
     branches: [ci/lorebook-entry-editor]
 
@@ -18,6 +22,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       UI_TEST_CLASS: ${{ inputs.ui_test_class }}
+      SELECTION_REGRESSION: ${{ inputs.selection_regression }}
     strategy:
       fail-fast: false
       matrix:
@@ -63,7 +68,7 @@ jobs:
             -x :web:buildWebUi --stacktrace 2>&1 | tee editor-test.log
           cp -r app/build/test-results/testDebugUnitTest editor-test-results
       - name: Compare existing prompt injection tests
-        if: inputs.ui_test_class == ''
+        if: inputs.ui_test_class == '' && !inputs.selection_regression
         continue-on-error: true
         run: |
           set -o pipefail
@@ -87,21 +92,40 @@ jobs:
           profile: pixel_2
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
-          script: if [ -n "$UI_TEST_CLASS" ]; then set -- "-Pandroid.testInstrumentationRunnerArguments.class=$UI_TEST_CLASS"; else set --; fi; ./gradlew :app:connectedDebugAndroidTest -Pandroid.injected.androidTest.leaveApksInstalledAfterRun=true -Pandroid.testInstrumentationRunnerArguments.package=me.rerere.rikkahub.ui.pages.extensions "$@" -x :web:buildWebUi --stacktrace; result=$?; captured=0; if [ -z "$UI_TEST_CLASS" ]; then for folder in round5-layout round6-layout; do adb pull "/sdcard/Android/data/me.rerere.rikkahub.huadeng.debug/files/$folder" "$folder" || captured=1; done; for folder in worldbook-editor-round7 worldbook-editor-round8; do adb pull "/sdcard/Android/data/me.rerere.rikkahub.huadeng.debug/files/$folder" "$folder" || captured=1; done; else adb pull /sdcard/Android/data/me.rerere.rikkahub.huadeng.debug/files/worldbook-editor-round8 worldbook-editor-round8 || captured=1; fi; if [ "$result" -ne 0 ]; then exit "$result"; fi; exit "$captured"
+          script: if [ -n "$UI_TEST_CLASS" ]; then set -- "-Pandroid.testInstrumentationRunnerArguments.class=$UI_TEST_CLASS"; elif [ "$SELECTION_REGRESSION" = true ]; then set -- "-Pandroid.testInstrumentationRunnerArguments.class=me.rerere.rikkahub.ui.pages.extensions.LorebookEntrySelectionUiTest,me.rerere.rikkahub.ui.pages.extensions.LorebookEntryRepairUiTest#explicitScopeStaysIndependentAcrossManualCrossGroupSelectionAndScopedToggles,me.rerere.rikkahub.ui.pages.extensions.LorebookEntryRepairUiTest#deletingWholeSelectedGroupKeepsEmptyGroupAndSurvivesReopen,me.rerere.rikkahub.ui.pages.extensions.LorebookEntryBatchUiTest#selectInReverseOrderCancelAndMoveWithoutChangingDataUntilCommit,me.rerere.rikkahub.ui.pages.extensions.LorebookEntryGroupsUiTest#scopedSelectionMovesToChosenGroupOnlyAfterConfirmationAndCanReturnToUngrouped"; else set --; fi; ./gradlew :app:connectedDebugAndroidTest -Pandroid.injected.androidTest.leaveApksInstalledAfterRun=true -Pandroid.testInstrumentationRunnerArguments.package=me.rerere.rikkahub.ui.pages.extensions "$@" -x :web:buildWebUi --stacktrace; result=$?; captured=0; if [ -z "$UI_TEST_CLASS" ] && [ "$SELECTION_REGRESSION" != true ]; then for folder in round5-layout round6-layout; do adb pull "/sdcard/Android/data/me.rerere.rikkahub.huadeng.debug/files/$folder" "$folder" || captured=1; done; for folder in worldbook-editor-round7 worldbook-editor-round8; do adb pull "/sdcard/Android/data/me.rerere.rikkahub.huadeng.debug/files/$folder" "$folder" || captured=1; done; else adb pull /sdcard/Android/data/me.rerere.rikkahub.huadeng.debug/files/worldbook-editor-round8 worldbook-editor-round8 || captured=1; fi; if [ "$result" -ne 0 ]; then exit "$result"; fi; exit "$captured"
       - name: Verify all editor UI test classes executed
-        if: inputs.ui_test_class == ''
+        if: inputs.ui_test_class == '' && !inputs.selection_regression
         run: |
           python - <<'PY'
           from pathlib import Path
           import xml.etree.ElementTree as ET
           cases = [case for file in Path('app/build/outputs/androidTest-results').rglob('TEST-*.xml')
                    for case in ET.parse(file).getroot().iter('testcase')]
-          expected = {'LorebookEntryLayoutTest': 6, 'LorebookEntryBatchUiTest': 3, 'LorebookEntryCopyUiTest': 2, 'LorebookEntryRailGestureTest': 3, 'LorebookEntryThumbnailUiTest': 6, 'LorebookEntryHelpUiTest': 2, 'LorebookEntryGroupsUiTest': 6, 'LorebookEntryRepairUiTest': 6}
+          expected = {'LorebookEntryLayoutTest': 6, 'LorebookEntryBatchUiTest': 3, 'LorebookEntryCopyUiTest': 2, 'LorebookEntryRailGestureTest': 3, 'LorebookEntryThumbnailUiTest': 6, 'LorebookEntryHelpUiTest': 2, 'LorebookEntryGroupsUiTest': 6, 'LorebookEntryRepairUiTest': 6, 'LorebookEntrySelectionUiTest': 3}
           for name, count in expected.items():
               executed = [case for case in cases if case.attrib.get('classname', '').endswith('.' + name)]
               assert len(executed) == count, (name, len(executed), count)
               assert all(case.find('skipped') is None for case in executed), name
               print(name, len(executed), 'executed')
+          PY
+      - name: Verify selection regression executed
+        if: inputs.selection_regression && inputs.ui_test_class == ''
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import xml.etree.ElementTree as ET
+          cases = [c for p in Path('app/build/outputs/androidTest-results').rglob('TEST-*.xml')
+                   for c in ET.parse(p).getroot().iter('testcase')]
+          expected = {
+              'LorebookEntrySelectionUiTest': 3, 'LorebookEntryRepairUiTest': 2,
+              'LorebookEntryBatchUiTest': 1, 'LorebookEntryGroupsUiTest': 1,
+          }
+          assert len(cases) == 7, len(cases)
+          for name, count in expected.items():
+              found = [c for c in cases if c.get('classname', '').endswith('.' + name)]
+              assert len(found) == count, (name, len(found))
+              assert all(c.find(t) is None for c in found for t in ['failure', 'error', 'skipped'])
+              print(name, count, 'passed')
           PY
       - name: Verify focused UI evidence test executed
         if: inputs.ui_test_class != ''
