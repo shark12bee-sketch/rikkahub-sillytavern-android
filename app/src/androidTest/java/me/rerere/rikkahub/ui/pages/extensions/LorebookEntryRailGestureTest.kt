@@ -1,5 +1,8 @@
 package me.rerere.rikkahub.ui.pages.extensions
 
+import android.graphics.Bitmap
+import java.io.File
+
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.getValue
@@ -130,6 +133,15 @@ class LorebookEntryRailGestureTest {
         val titleBounds = compose.onNodeWithText(title).fetchSemanticsNode().boundsInRoot
         val safety = compose.onNodeWithTag("lorebook-insertion-safety-area").fetchSemanticsNode().boundsInRoot
         val list = compose.onNodeWithTag("lorebook-entry-list").fetchSemanticsNode().boundsInRoot
+        val folder = File(checkNotNull(InstrumentationRegistry.getInstrumentation().targetContext.getExternalFilesDir(null)), "round5-layout")
+        folder.mkdirs()
+        File(folder, "metrics.txt").writeText(
+            "safetyHeightDp=${safety.height / pxPerDp}\n" +
+                "titleGapDp=${(safety.top - titleBounds.bottom) / pxPerDp}\n" +
+                "listHeightDp=${list.height / pxPerDp}\n",
+        )
+        val screenshot = checkNotNull(InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot())
+        File(folder, "editor.png").outputStream().use { screenshot.compress(Bitmap.CompressFormat.PNG, 100, it) }
         assertTrue("Compact batch height: ${safety.height / pxPerDp}dp", safety.height / pxPerDp in 120f..150.5f)
         assertTrue("No disabled-entry or warning placeholders above the safety area", safety.top - titleBounds.bottom <= 12f * pxPerDp)
         assertTrue("List viewport: ${list.height / pxPerDp}dp", list.height > safety.height * 2f)
@@ -140,7 +152,7 @@ class LorebookEntryRailGestureTest {
             assertEquals(48f * pxPerDp, square.width, 1f)
             assertEquals(square.width, square.height, 0f)
         }
-        compose.onNodeWithText("Entry 2").assertIsDisplayed()
+        compose.onNodeWithText("Entry 1").assertIsDisplayed()
         compose.onNodeWithText("插入最前").assertIsDisplayed()
         compose.onNodeWithText("插入最后").assertIsDisplayed()
         compose.onNodeWithText("取消待插入").assertIsDisplayed()

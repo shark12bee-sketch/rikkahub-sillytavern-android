@@ -99,6 +99,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -1496,6 +1497,7 @@ internal fun LorebookEditSheet(
     ) {
         Column(
             modifier = Modifier
+                .testTag("lorebook-editor-sheet")
                 .fillMaxWidth()
                 .fillMaxHeight(0.95f)
                 .padding(16.dp),
@@ -1793,7 +1795,7 @@ internal fun RegexInjectionEntryCard(
                             modifier = Modifier
                                 .weight(1f)
                                 .clickable { editingName = true; editNameValue = entry.name },
-                            maxLines = if (collapsed) 1 else 2,
+                            maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                         )
                     }

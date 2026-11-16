@@ -103,6 +103,7 @@ class LorebookEntryLayoutTest {
             assertTrue(handle.height >= card.height - 8f * density - 1f)
             assertTrue(compose.onNodeWithText(entry.name).fetchSemanticsNode().boundsInRoot.width >= card.width - 64f * density)
             assertEquals(20f * density, compose.onNodeWithTag("lorebook-drag-icon").fetchSemanticsNode().boundsInRoot.width, 1f)
+            assertTrue(card.right - compose.onNodeWithTag("lorebook-drag-icon").fetchSemanticsNode().boundsInRoot.right <= 8f * density + 1f)
             assertTrue(card.right - handle.right <= 4f * density + 1f)
             assertTrue(delete.fetchSemanticsNode().boundsInRoot.right <= handle.left)
             assertTrue(edit.fetchSemanticsNode().boundsInRoot.right <= delete.fetchSemanticsNode().boundsInRoot.left)
