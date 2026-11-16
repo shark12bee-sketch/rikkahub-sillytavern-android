@@ -89,7 +89,7 @@ class LorebookEntryThumbnailUiTest {
         compose.onNodeWithText("完成选择").performClick()
     }
 
-    private fun dragAfter(handle: SemanticsNodeInteraction, targetName: String) {
+    private fun dragAfter(handle: SemanticsNodeInteraction, targetName: String, capture: String? = null) {
         compose.onNodeWithTag("lorebook-entry-list").performScrollToNode(hasContentDescription("拖动排序 $targetName"))
         val target = compose.onNodeWithContentDescription("拖动排序 $targetName").fetchSemanticsNode().boundsInRoot
         val bounds = handle.fetchSemanticsNode().boundsInRoot
@@ -101,6 +101,7 @@ class LorebookEntryThumbnailUiTest {
         handle.performTouchInput { moveTo(Offset(bounds.width * 0.3f, target.center.y + 4f - bounds.top)) }
         compose.mainClock.advanceTimeBy(64)
         compose.onNodeWithText("松手插入").assertIsDisplayed()
+        if (capture != null) screenshot(capture)
         handle.performTouchInput { up() }
         compose.mainClock.autoAdvance = true
         compose.waitForIdle()
@@ -130,6 +131,10 @@ class LorebookEntryThumbnailUiTest {
         }
         compose.waitForIdle()
         compose.onNodeWithTag("lorebook-entry-preview").assertDoesNotExist()
+        tile(long).performTouchInput { click() }
+        compose.onNodeWithTag("lorebook-entry-preview").assertIsDisplayed()
+        compose.onNodeWithText("关闭预览").performClick()
+        compose.onNodeWithTag("lorebook-entry-preview").assertDoesNotExist()
         compose.runOnIdle { assertEquals(before, batch); assertEquals(original, draft); assertEquals(0, singleCommits) }
     }
 
@@ -156,6 +161,12 @@ class LorebookEntryThumbnailUiTest {
         compose.mainClock.autoAdvance = true
         compose.waitForIdle()
         compose.onNodeWithTag("lorebook-lifted-batch").assertDoesNotExist()
+        compose.mainClock.autoAdvance = false
+        handle.performTouchInput { down(Offset(width * 0.3f, height * 0.7f)) }
+        compose.mainClock.advanceTimeBy(700)
+        handle.performTouchInput { moveTo(Offset(-100f, viewport.center.y - bounds.top)); cancel() }
+        compose.mainClock.autoAdvance = true
+        compose.waitForIdle()
         compose.runOnIdle { assertEquals(0, singleCommits); assertEquals(entries.take(3), batch?.entries); assertEquals(original, draft) }
     }
 
@@ -179,7 +190,7 @@ class LorebookEntryThumbnailUiTest {
         showList()
         dragAfter(tile(entries[0]), "Four")
         val handle = compose.onNodeWithContentDescription("长按拖动 2 条")
-        dragAfter(handle, "One")
+        dragAfter(handle, "One", "group-drag")
         compose.runOnIdle {
             assertNull(batch)
             assertEquals(listOf(3, 0, 1, 2, 4, 5).map { entries[it] }, draft.entries)
