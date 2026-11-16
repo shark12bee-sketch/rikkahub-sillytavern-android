@@ -63,7 +63,7 @@ class LorebookEntryLayoutTest {
                     },
                     onUpdatePending = { staged = it },
                     modifier = Modifier.size(width = 360.dp, height = 560.dp).testTag("editor"),
-                    header = {},
+                    header = { Text("Book settings", Modifier.height(200.dp)) },
                     onEntriesChange = { draft = draft.copy(entries = it) },
                     onEditEntry = {},
                     onAddEntry = {},
@@ -100,6 +100,7 @@ class LorebookEntryLayoutTest {
         assertTrue(safety.height <= editor.height * 0.56f)
         assertTrue(list.height > editor.height * 0.40f)
         compose.onNodeWithText("Existing 0").assertIsDisplayed()
+        compose.onNodeWithText("Book settings").assertDoesNotExist()
         compose.onNodeWithText("插入最前").assertIsDisplayed()
         compose.onNodeWithText("插入最后").assertIsDisplayed()
         compose.onNodeWithTag("lorebook-entry-list").performScrollToNode(hasText("Existing 29"))
@@ -112,6 +113,7 @@ class LorebookEntryLayoutTest {
         val original = draft.entries
         showEditor()
         compose.onNodeWithText("取消待插入").performClick()
+        compose.onNodeWithText("Book settings").assertIsDisplayed()
         compose.runOnIdle { assertEquals(original, draft.entries); staged = pending }
         compose.onNodeWithText("插入最前").performClick()
         compose.runOnIdle {
