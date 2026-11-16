@@ -112,6 +112,15 @@ class LorebookEntryDragTest {
     }
 
     @Test
+    fun `pointer inside a tall card takes precedence over a nearby short card center`() {
+        val tall = last.copy(top = 300f, bottom = 780f)
+        val short = otherGroup.copy(top = 220f, bottom = 300f)
+        val point = LorebookDragPoint(280f, 320f)
+        assertEquals(tall.id, feedback(point, targets = listOf(short, tall)).placement?.targetId)
+        assertNull(feedback(point, targets = listOf(first, tall.copy(group = "B"))).placement)
+    }
+
+    @Test
     fun `scrolling updates target from current item geometry without moving the pointer`() {
         val point = LorebookDragPoint(280f, 250f)
         assertEquals(first.id, feedback(point).placement?.targetId)
