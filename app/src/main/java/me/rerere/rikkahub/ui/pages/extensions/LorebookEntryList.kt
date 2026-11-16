@@ -198,16 +198,13 @@ internal fun LorebookEntryList(
                                         entry = entry,
                                         collapsed = collapsed,
                                         dragHandle = {
-                                            Text(
-                                                "☰",
-                                                modifier = Modifier.size(40.dp)
-                                                    .semantics { contentDescription = "拖动排序 ${entry.name}" }
-                                                    .draggableHandle(
-                                                        enabled = pendingEntry == null,
-                                                        onDragStarted = { draggingGroup = group },
-                                                        onDragStopped = { draggingGroup = null; insertionId = null },
-                                                    ),
-                                                style = MaterialTheme.typography.titleLarge,
+                                            LorebookDragHandle(
+                                                description = "拖动排序 ${entry.name}",
+                                                modifier = Modifier.draggableHandle(
+                                                    enabled = pendingEntry == null,
+                                                    onDragStarted = { draggingGroup = group },
+                                                    onDragStopped = { draggingGroup = null; insertionId = null },
+                                                ),
                                             )
                                         },
                                         onEdit = { onEditEntry(entry) },
@@ -260,16 +257,21 @@ private fun NewLorebookEntryPreview(
     RegexInjectionEntryCard(
         entry = entry,
         dragHandle = {
-            Text(
-                "☰",
-                modifier = Modifier.size(40.dp)
-                    .semantics { contentDescription = "拖动插入 ${entry.name}" }
-                    .then(handleModifier),
-                style = MaterialTheme.typography.titleLarge,
-            )
+            LorebookDragHandle("拖动插入 ${entry.name}", handleModifier)
         },
         onEdit = onEdit,
         onDelete = onCancel,
         onUpdate = onUpdate,
     )
+}
+
+/** The icon and its independent 48dp hit area share the same measured bounds. */
+@Composable
+internal fun LorebookDragHandle(description: String, modifier: Modifier = Modifier) {
+    Box(
+        Modifier.size(48.dp).semantics { contentDescription = description }.then(modifier),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text("☰", style = MaterialTheme.typography.titleLarge)
+    }
 }

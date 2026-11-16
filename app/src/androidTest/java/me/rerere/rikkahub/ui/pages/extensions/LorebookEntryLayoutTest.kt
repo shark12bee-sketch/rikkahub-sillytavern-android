@@ -24,6 +24,8 @@ import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.unit.dp
+import androidx.test.platform.app.InstrumentationRegistry
+import me.rerere.rikkahub.R
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import me.rerere.rikkahub.data.model.Lorebook
 import me.rerere.rikkahub.data.model.PromptInjection
@@ -70,6 +72,41 @@ class LorebookEntryLayoutTest {
                 )
             }
         }
+    }
+
+    @Test
+    fun handleIsTheRightmostIndependent48dpTargetInBothCardModes() {
+        var collapsed by mutableStateOf(false)
+        var edited = 0
+        var deleted = 0
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val density = context.resources.displayMetrics.density
+        compose.setContent {
+            MaterialTheme {
+                Box(Modifier.fillMaxWidth().testTag("card")) {
+                    RegexInjectionEntryCard(
+                        pending, collapsed,
+                        dragHandle = { LorebookDragHandle("Handle") },
+                        onEdit = { edited++ }, onDelete = { deleted++ },
+                    )
+                }
+            }
+        }
+        repeat(2) {
+            val card = compose.onNodeWithTag("card").fetchSemanticsNode().boundsInRoot
+            val handle = compose.onNodeWithContentDescription("Handle").fetchSemanticsNode().boundsInRoot
+            val delete = compose.onNodeWithContentDescription(context.getString(R.string.prompt_page_delete))
+            val edit = compose.onNodeWithContentDescription(context.getString(R.string.prompt_page_edit))
+            assertTrue(handle.width >= 48f * density - 1f)
+            assertTrue(handle.height >= 48f * density - 1f)
+            assertTrue(card.right - handle.right <= 4f * density + 1f)
+            assertTrue(delete.fetchSemanticsNode().boundsInRoot.right <= handle.left)
+            assertTrue(edit.fetchSemanticsNode().boundsInRoot.right <= delete.fetchSemanticsNode().boundsInRoot.left)
+            edit.performClick()
+            delete.performClick()
+            compose.runOnIdle { collapsed = true }
+        }
+        compose.runOnIdle { assertEquals(2, edited); assertEquals(2, deleted) }
     }
 
     @Test
