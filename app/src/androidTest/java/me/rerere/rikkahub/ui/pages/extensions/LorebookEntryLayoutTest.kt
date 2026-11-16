@@ -76,7 +76,7 @@ class LorebookEntryLayoutTest {
     }
 
     @Test
-    fun handleIsTheRightmostIndependent48dpTargetInBothCardModes() {
+    fun narrowRailUsesCardHeightAndReleasesTitleWidthInBothModes() {
         var entry by mutableStateOf(pending)
         var collapsed by mutableStateOf(false)
         var edited = 0
@@ -99,8 +99,10 @@ class LorebookEntryLayoutTest {
             val handle = compose.onNodeWithContentDescription("Handle").fetchSemanticsNode().boundsInRoot
             val delete = compose.onNodeWithContentDescription(context.getString(R.string.prompt_page_delete))
             val edit = compose.onNodeWithContentDescription(context.getString(R.string.prompt_page_edit))
-            assertTrue(handle.width >= 48f * density - 1f)
-            assertTrue(handle.height >= 48f * density - 1f)
+            assertEquals(36f * density, handle.width, 1f)
+            assertTrue(handle.height >= card.height - 8f * density - 1f)
+            assertTrue(compose.onNodeWithText(entry.name).fetchSemanticsNode().boundsInRoot.width >= card.width - 64f * density)
+            assertEquals(20f * density, compose.onNodeWithTag("lorebook-drag-icon").fetchSemanticsNode().boundsInRoot.width, 1f)
             assertTrue(card.right - handle.right <= 4f * density + 1f)
             assertTrue(delete.fetchSemanticsNode().boundsInRoot.right <= handle.left)
             assertTrue(edit.fetchSemanticsNode().boundsInRoot.right <= delete.fetchSemanticsNode().boundsInRoot.left)
