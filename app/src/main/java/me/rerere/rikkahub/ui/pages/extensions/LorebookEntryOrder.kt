@@ -11,13 +11,13 @@ internal fun moveLorebookEntry(
 ): List<PromptInjection.RegexInjection> {
     val from = entries.firstOrNull { it.id == fromId } ?: return entries
     val to = entries.firstOrNull { it.id == toId } ?: return entries
-    if (from.group != to.group || fromId == toId) return entries
-    val group = entries.filter { it.group == from.group }.toMutableList()
+    if (from.group.ifBlank { "" } != to.group.ifBlank { "" } || fromId == toId) return entries
+    val group = entries.filter { it.group.ifBlank { "" } == from.group.ifBlank { "" } }.toMutableList()
     val target = group.indexOfFirst { it.id == toId }
     group.remove(from)
     group.add(target, from)
     val iterator = group.iterator()
-    return entries.map { if (it.group == from.group) iterator.next() else it }
+    return entries.map { if (it.group.ifBlank { "" } == from.group.ifBlank { "" }) iterator.next() else it }
 }
 
 internal data class LorebookEntryPlacement(val targetId: Uuid?, val after: Boolean, val group: String? = null) {

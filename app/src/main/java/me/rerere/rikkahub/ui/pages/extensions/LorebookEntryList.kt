@@ -114,7 +114,7 @@ internal fun LorebookEntryList(
                     LorebookDropTarget(null, headerGroup, top, top + item.size)
                 } else entries[item.key]?.let { entry ->
                     val top = (listBounds?.top ?: 0f) + item.offset
-                    LorebookDropTarget(entry.id, entry.group, top, top + item.size)
+                    LorebookDropTarget(entry.id, entry.group.ifBlank { "" }, top, top + item.size)
                 }
             }
             evaluateLorebookEntryDrag(
@@ -222,7 +222,7 @@ internal fun LorebookEntryList(
                         TextButton(onClick = { onAddEntry("") }, enabled = !taskActive) { Text("新增") }
                     }
                 }
-                val grouped = visibleEntries.groupBy { it.group }
+                val grouped = visibleEntries.groupBy { it.group.ifBlank { "" } }
                 val groups = groupNames + ""
                 groups.forEachIndexed { index, group ->
                     val entries = grouped[group].orEmpty()

@@ -27,6 +27,29 @@ class LorebookEntryGroupsUiTest {
     private var stored by mutableStateOf(original)
     private var sheetVisible by mutableStateOf(true)
 
+    @Test fun whitespaceGroupEntriesStayVisibleAndGroupFrontUsesTheirFirstSlot() {
+        val spaced = alpha.copy(group = "  ")
+        val plain = beta.copy(group = "")
+        draft = original.copy(entries = listOf(spaced, plain, anchor))
+        val fresh = alpha.copy(id = Uuid.random(), name = "Fresh", group = "")
+        var pending by mutableStateOf<PromptInjection.RegexInjection?>(fresh)
+        compose.setContent {
+            MaterialTheme {
+                LorebookEntryList(draft, pending, {}, { placement ->
+                    draft = draft.withLorebookEntries(insertLorebookEntry(draft.entries, fresh, placement)); pending = null
+                }, {}, modifier = Modifier.size(360.dp, 650.dp),
+                    header = {}, onEntriesChange = {}, onEditEntry = {}, onAddEntry = {}, onGroupSettings = { _, _ -> })
+            }
+        }
+        compose.onNodeWithTag("lorebook-entry-list").performScrollToNode(hasText("Alpha"))
+        compose.onNodeWithText("Alpha").assertIsDisplayed()
+        compose.onNodeWithText("插入最前").performClick()
+        compose.runOnIdle {
+            assertEquals(listOf(fresh, spaced, plain, anchor), draft.entries)
+            assertEquals("  ", draft.entries.single { it.id == spaced.id }.group)
+        }
+    }
+
     private fun chooseGroup(group: String) {
         compose.onNodeWithTag("lorebook-target-group").performClick()
         compose.onNodeWithText("组内：${groupLabel(group)}").performClick()
