@@ -10,6 +10,19 @@ import org.junit.Test
 import kotlin.uuid.Uuid
 
 class LorebookEntryBatchTest {
+    @Test fun `successive single moves retain every field and remaining entries can move together`() {
+        val entries = List(6) { PromptInjection.RegexInjection(name = "entry $it", content = "body $it", group = "same", priority = it, enabled = it % 2 == 0) }
+        val book = Lorebook(entries = entries)
+        val first = applyLorebookBatch(listOf(book), LorebookBatchRequest(book, book,
+            LorebookBatchAction.Move(setOf(entries[0].id)), LorebookEntryPlacement(entries[3].id, true))).single()
+        assertEquals(listOf(1, 2, 3, 0, 4, 5).map { entries[it] }, first.entries)
+        val second = applyLorebookBatch(listOf(first), LorebookBatchRequest(first, first,
+            LorebookBatchAction.Move(setOf(entries[1].id)), LorebookEntryPlacement(entries[0].id, true))).single()
+        assertEquals(listOf(2, 3, 0, 1, 4, 5).map { entries[it] }, second.entries)
+        val final = applyLorebookBatch(listOf(second), LorebookBatchRequest(second, second,
+            LorebookBatchAction.Move(setOf(entries[2].id)), atEnd = true)).single()
+        assertEquals(listOf(3, 0, 1, 4, 5, 2).map { entries[it] }, final.entries)
+    }
     private fun entry(name: String, group: String = "") = PromptInjection.RegexInjection(
         name = name, group = group, content = "body $name", keywords = listOf(name),
         priority = 63, injectDepth = 7, probability = 37, enabled = false,

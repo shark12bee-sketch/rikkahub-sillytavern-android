@@ -11,16 +11,29 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.platform.LocalViewConfiguration
+import androidx.compose.ui.platform.ViewConfiguration
+import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
@@ -54,33 +67,58 @@ internal fun LorebookBatchPreviewContent(
     handleModifier: Modifier,
     onRemove: (Uuid) -> Unit,
     enabled: Boolean = true,
+    insertion: LorebookInsertionState? = null,
+    thumbnailHandle: @Composable (Uuid, () -> Unit) -> Modifier = { _, tap -> Modifier.clickable(enabled = enabled, onClick = tap) },
 ) {
+    val configuration = LocalViewConfiguration.current
+    val removeConfiguration = remember(configuration) {
+        object : ViewConfiguration by configuration {
+            override val minimumTouchTargetSize = DpSize(24.dp, 24.dp)
+        }
+    }
+    var previewId by remember(preview.id) { mutableStateOf<Uuid?>(null) }
+    val thumbnails = rememberLazyListState()
+    SideEffect { insertion?.previewWindow = LorebookThumbnailWindow(thumbnails.firstVisibleItemIndex, thumbnails.firstVisibleItemScrollOffset) }
+    LaunchedEffect(insertion?.pointer != null) { if (insertion?.pointer != null) previewId = null }
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         LazyRow(
-            modifier = Modifier.weight(1f).testTag("lorebook-batch-thumbnails"),
+            state = thumbnails,
+            modifier = Modifier.weight(1f).testTag("lorebook-batch-thumbnails")
+                .onGloballyPositioned { insertion?.previewBounds = it.boundsInRoot() },
             horizontalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             items(preview.entries, key = { it.id }) { entry ->
-                Surface(shape = MaterialTheme.shapes.medium, color = MaterialTheme.colorScheme.secondaryContainer) {
-                    Box(Modifier.size(48.dp).testTag("lorebook-thumbnail-${entry.id}")) {
-                        Text(
-                            lorebookThumbnailCharacter(entry.name),
-                            Modifier.align(Alignment.Center).padding(top = 6.dp),
-                            style = MaterialTheme.typography.titleLarge,
-                            maxLines = 1,
-                            overflow = TextOverflow.Clip,
-                        )
-                        Box(
+                val drag = insertion?.drag
+                val lifted = drag != null && (drag.entryId == null || drag.entryId == entry.id)
+                Box {
+                    Box(Modifier.size(48.dp).testTag("lorebook-thumbnail-${entry.id}")
+                        .then(thumbnailHandle(entry.id) { previewId = entry.id })
+                        .graphicsLayer { alpha = if (lifted) 0.25f else 1f }) {
+                        LorebookThumbnailFace(entry)
+                        // The corner button must not expand its hit area across the preview/drag tile.
+                        CompositionLocalProvider(LocalViewConfiguration provides removeConfiguration) { Box(
                             Modifier.align(Alignment.TopEnd).size(24.dp)
-                                .clickable(enabled = enabled) { onRemove(entry.id) }
+                                .clickable(enabled = enabled && insertion?.pointer == null) { onRemove(entry.id) }
                                 .semantics { contentDescription = "移除选择 ${entry.name}" },
                             contentAlignment = Alignment.Center,
-                        ) { Text("×", style = MaterialTheme.typography.titleMedium) }
+                        ) { Text("×", style = MaterialTheme.typography.titleMedium) } }
                     }
+                    if (previewId == entry.id) LorebookEntryPreviewPopup(entry) { previewId = null }
                 }
             }
         }
         LorebookDragHandle("长按拖动 ${preview.entries.size} 条", handleModifier)
+    }
+}
+
+@Composable
+internal fun LorebookThumbnailFace(entry: PromptInjection.RegexInjection, modifier: Modifier = Modifier) {
+    Surface(modifier = modifier.size(48.dp), shape = MaterialTheme.shapes.medium,
+        color = MaterialTheme.colorScheme.secondaryContainer) {
+        Box(contentAlignment = Alignment.Center) {
+            Text(lorebookThumbnailCharacter(entry.name), Modifier.padding(top = 6.dp),
+                style = MaterialTheme.typography.titleLarge, maxLines = 1, overflow = TextOverflow.Clip)
+        }
     }
 }
 
@@ -139,11 +177,12 @@ internal fun LorebookCopyShelf(task: LorebookCopyTask, busy: Boolean, onRemove: 
         onConfirm = {}, onInsertAtEdge = {}, onCancel = onCancel,
         enabled = false, cancelEnabled = !busy, longPressDrag = true, compact = true,
         modifier = Modifier.fillMaxWidth().testTag("lorebook-copy-shelf"),
-    ) { handle -> LorebookBatchPreviewContent(task.preview(), handle, onRemove, !busy) }
+    ) { handle, thumbnail -> LorebookBatchPreviewContent(task.preview(), handle, onRemove, !busy, state, thumbnail) }
 }
 
 internal fun lorebookCopyConfirmation(request: LorebookBatchRequest): String {
-    val task = (request.action as LorebookBatchAction.Copy).task
+    val action = request.action as LorebookBatchAction.Copy
+    val task = action.task.copy(entries = orderedLorebookSelection(action.task.entries, action.ids))
     val group = task.entries.first().group
     val existingGroups = request.draft.entries.flatMap { entry ->
         listOf(entry.group) + entry.inclusionGroup.split(",").map { it.trim() }

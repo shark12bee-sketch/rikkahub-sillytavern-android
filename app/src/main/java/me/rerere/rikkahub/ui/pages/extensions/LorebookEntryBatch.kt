@@ -10,7 +10,10 @@ import kotlin.uuid.Uuid
 
 internal sealed interface LorebookBatchAction {
     data class Move(val ids: Set<Uuid>) : LorebookBatchAction
-    data class Copy(val task: LorebookCopyTask) : LorebookBatchAction
+    data class Copy(
+        val task: LorebookCopyTask,
+        val ids: Set<Uuid> = task.entries.map { it.id }.toSet(),
+    ) : LorebookBatchAction
 }
 
 internal data class LorebookBatchRequest(
@@ -69,9 +72,12 @@ internal fun applyLorebookBatch(books: List<Lorebook>, request: LorebookBatchReq
             require(action.task.sourceBookId != request.draft.id) { "请选择另一份世界书作为复制目标" }
             require(books.any { it.id == action.task.sourceBookId }) { "来源世界书已不存在，请取消后重新选择" }
             require(action.task.entries.map { it.id }.distinct().size == action.task.entries.size) { "待复制条目 ID 重复，请重新选择" }
+            require(action.ids.isNotEmpty() && action.task.entries.map { it.id }.containsAll(action.ids)) {
+                "待复制选择已改变，请重新选择落点"
+            }
             val occupied = (books.flatMap { it.entries } + request.draft.entries + action.task.entries)
                 .mapTo(mutableSetOf()) { it.id }
-            val copies = action.task.entries.map { entry ->
+            val copies = orderedLorebookSelection(action.task.entries, action.ids).map { entry ->
                 var id = Uuid.random()
                 while (!occupied.add(id)) id = Uuid.random()
                 entry.copy(id = id)

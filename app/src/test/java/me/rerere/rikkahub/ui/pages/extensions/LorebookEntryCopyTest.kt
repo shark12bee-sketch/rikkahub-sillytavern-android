@@ -144,4 +144,49 @@ class LorebookEntryCopyTest {
         val restored = LorebookSerializer.importFromJson(LorebookSerializer.exportToJson(copied), "test")
         assertEquals(copied.entries, copied.entries.zip(restored.entries).map { (before, after) -> after.copy(id = before.id) })
     }
+
+    @Test fun `single copies consume only successful entry and remaining task can still commit together`() = runTest {
+        val state = LorebookCopyState().apply { stage(source.id, entries) }
+        var stored = listOf(source, target)
+        val writer = LorebookBatchWriter { stored = it(stored) }
+        val staged = checkNotNull(state.pending.value)
+        val first = setOf(entries[1].id)
+        val request = LorebookBatchRequest(target, target, LorebookBatchAction.Copy(staged, first), atEnd = true)
+        state.commit(staged, first) { writer.commit(request) }
+        assertEquals(listOf(entries[0], entries[2]), state.pending.value?.entries)
+        assertEquals(staged.id, state.pending.value?.id)
+        assertEquals(2, stored[1].entries.size)
+        assertEquals(entries[1], stored[1].entries.last().copy(id = entries[1].id))
+        assertNotEquals(entries[1].id, stored[1].entries.last().id)
+        assertSame(source, stored[0])
+        val remaining = checkNotNull(state.pending.value)
+        val next = LorebookBatchRequest(stored[1], stored[1], LorebookBatchAction.Copy(remaining), atEnd = true)
+        state.commit(remaining) { writer.commit(next) }
+        assertNull(state.pending.value)
+        assertEquals(listOf(targetEntry.name, entries[1].name, entries[0].name, entries[2].name), stored[1].entries.map { it.name })
+        assertEquals(4, stored[1].entries.map { it.id }.distinct().size)
+    }
+
+    @Test fun `single copy failure invalid ids and stale confirmation preserve entire selection`() = runTest {
+        val state = LorebookCopyState().apply { stage(source.id, entries) }
+        val staged = checkNotNull(state.pending.value)
+        var stored = listOf(source, target)
+        var fail = true
+        val writer = LorebookBatchWriter { update ->
+            stored = update(stored)
+            if (fail) { fail = false; throw IOException("disk failure") }
+        }
+        val ids = setOf(entries[0].id)
+        val request = LorebookBatchRequest(target, target, LorebookBatchAction.Copy(staged, ids), atEnd = true)
+        assertTrue(runCatching { state.commit(staged, ids) { writer.commit(request) } }.isFailure)
+        assertEquals(staged, state.pending.value)
+        assertEquals(listOf(source, target), stored)
+        for (invalid in listOf(emptySet(), setOf(Uuid.random()))) {
+            assertTrue(runCatching { applyLorebookBatch(stored, request.copy(action = LorebookBatchAction.Copy(staged, invalid))) }.isFailure)
+            assertTrue(runCatching { state.commit(staged, invalid) { error("Must not write") } }.isFailure)
+        }
+        state.remove(entries[2].id)
+        assertTrue(runCatching { state.commit(staged, ids) { error("Stale confirmation must not write") } }.isFailure)
+        assertEquals(entries.take(2), state.pending.value?.entries)
+    }
 }
