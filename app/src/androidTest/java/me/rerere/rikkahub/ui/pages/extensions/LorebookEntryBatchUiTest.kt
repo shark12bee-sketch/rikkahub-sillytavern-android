@@ -121,10 +121,10 @@ class LorebookEntryBatchUiTest {
         compose.mainClock.autoAdvance = false
         handle.performTouchInput { down(center) }
         compose.mainClock.advanceTimeBy(700)
-        compose.onNodeWithText("安全区内 · 插入已暂停；向下拖出安全区继续").assertIsDisplayed()
+        compose.onNodeWithText("已暂停").assertIsDisplayed()
         handle.performTouchInput { moveTo(Offset(bounds.width / 2f, viewport.center.y - bounds.top)) }
         compose.mainClock.advanceTimeBy(64)
-        compose.onNodeWithText("正在选择插入位置 · 松手插入指示线处").assertIsDisplayed()
+        compose.onNodeWithText("松手插入").assertIsDisplayed()
         handle.performTouchInput { up() }
         compose.mainClock.autoAdvance = true
         compose.runOnIdle {

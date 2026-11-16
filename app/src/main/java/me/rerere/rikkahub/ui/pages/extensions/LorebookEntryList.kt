@@ -1,5 +1,6 @@
 package me.rerere.rikkahub.ui.pages.extensions
 
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -10,6 +11,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -18,6 +20,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -29,14 +32,19 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalViewConfiguration
+import androidx.compose.ui.platform.ViewConfiguration
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import me.rerere.rikkahub.data.model.Lorebook
 import me.rerere.rikkahub.data.model.PromptInjection
@@ -136,17 +144,18 @@ internal fun LorebookEntryList(
 
     BoxWithConstraints(modifier = modifier) {
         val safetyHeightLimit = maxHeight * 0.55f
-        Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(if (batch != null) 4.dp else 8.dp)) {
             // Reserve at least 45% for the independent list, even with large text or an expanded editor.
             if (hasPending) {
                 LorebookInsertionSafetyArea(
                     state = insertion,
                     feedback = { feedback },
                     modifier = Modifier.heightIn(max = safetyHeightLimit).testTag("lorebook-insertion-safety-area"),
-                    title = if (batch != null) "${batch.mode.label} · ${batch.entries.size} 条 · ${batch.group.ifBlank { "未分组" }}"
+                    title = if (batch != null) "${batch.mode.label} · 已选 ${batch.entries.size} 条"
                         else "待插入 · ${pendingEntry?.group?.ifBlank { "未分组" }}",
                     onConfirm = { if (batch != null) onCommitBatch(it, null) else onInsertPending(it) },
                     longPressDrag = batch != null,
+                    compact = batch != null,
                     enabled = batchEnabled,
                     cancelEnabled = !batchBusy,
                     idleHint = batchHint ?: if (batch != null) "长按右侧手柄整组拖动，选择同组落点；快捷插入首尾会立即保存"
@@ -229,7 +238,7 @@ internal fun LorebookEntryList(
                                         dragHandle = {
                                             LorebookDragHandle(
                                                 description = "拖动排序 ${entry.name}",
-                                                modifier = Modifier.draggableHandle(
+                                                modifier = Modifier.longPressDraggableHandle(
                                                     enabled = !taskActive,
                                                     onDragStarted = { draggingGroup = group },
                                                     onDragStopped = { draggingGroup = null; insertionId = null },
@@ -296,13 +305,28 @@ private fun NewLorebookEntryPreview(
     )
 }
 
-/** The icon and its independent 48dp hit area share the same measured bounds. */
+/** The 20dp icon lives inside a real 36dp rail, without invisible horizontal hit expansion. */
 @Composable
 internal fun LorebookDragHandle(description: String, modifier: Modifier = Modifier) {
-    Box(
-        Modifier.size(48.dp).semantics { contentDescription = description }.then(modifier),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text("☰", style = MaterialTheme.typography.titleLarge)
+    val configuration = LocalViewConfiguration.current
+    val railConfiguration = remember(configuration) {
+        object : ViewConfiguration by configuration {
+            override val minimumTouchTargetSize = DpSize(36.dp, 0.dp)
+        }
+    }
+    val color = MaterialTheme.colorScheme.onSurfaceVariant
+    CompositionLocalProvider(LocalViewConfiguration provides railConfiguration) {
+        Box(
+            Modifier.width(36.dp).heightIn(min = 48.dp)
+                .semantics { contentDescription = description }.then(modifier),
+            contentAlignment = Alignment.Center,
+        ) {
+            Canvas(Modifier.size(20.dp).testTag("lorebook-drag-icon")) {
+                for (y in listOf(5.dp, 10.dp, 15.dp)) {
+                    drawLine(color, Offset(1.dp.toPx(), y.toPx()), Offset(19.dp.toPx(), y.toPx()),
+                        strokeWidth = 2.dp.toPx(), cap = StrokeCap.Round)
+                }
+            }
+        }
     }
 }
