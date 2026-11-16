@@ -113,6 +113,7 @@ class LorebookEntryLayoutTest {
         val original = draft.entries
         showEditor()
         compose.onNodeWithText("取消待插入").performClick()
+        compose.onNodeWithTag("lorebook-entry-list").performScrollToNode(hasText("Book settings"))
         compose.onNodeWithText("Book settings").assertIsDisplayed()
         compose.runOnIdle { assertEquals(original, draft.entries); staged = pending }
         compose.onNodeWithText("插入最前").performClick()
