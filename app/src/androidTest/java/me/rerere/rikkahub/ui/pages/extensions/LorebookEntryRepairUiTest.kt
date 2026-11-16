@@ -141,7 +141,11 @@ class LorebookEntryRepairUiTest {
         stored = before
         showSheet()
         expand("A")
-        compose.onNodeWithTag("lorebook-entry-list").performScrollToNode(hasContentDescription("拖动排序 Alpha"))
+        // Scroll the destination into view too: a visible source alone does not compose later rows.
+        compose.onNodeWithTag("lorebook-entry-list").performScrollToNode(hasTestTag("lorebook-group:B"))
+        compose.onNodeWithContentDescription("拖动排序 Alpha").assertIsDisplayed()
+        compose.onNodeWithTag("lorebook-group:B").assertIsDisplayed()
+        captureLorebookRepairEvidence("ordinary-before-drag")
         dragTo(compose.onNodeWithContentDescription("拖动排序 Alpha"), compose.onNodeWithTag("lorebook-group:B"))
         compose.runOnIdle {
             assertEquals(1, writes)
