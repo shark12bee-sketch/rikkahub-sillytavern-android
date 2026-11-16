@@ -142,6 +142,7 @@ internal fun LorebookInsertionSafetyArea(
                         alpha = if (dragFeedback.phase == LorebookDragPhase.INSERTION) 0.45f else 1f
                         scaleX = if (longPressDrag && state.pointer != null) 0.98f else 1f
                         scaleY = scaleX
+                        shadowElevation = if (longPressDrag && state.pointer != null) 6.dp.toPx() else 0f
                     },
             ) {
                 content(handleModifier)
