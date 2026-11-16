@@ -133,15 +133,21 @@ class LorebookEntryRepairUiTest {
     }
 
     @Test fun ordinaryCardDragAppendsToExistingGroupOnlyOnReleaseThenSavesAndReopens() {
+        // Keep source and target simultaneously visible in the real sheet viewport.
+        val before = original.copy(entries = listOf(a, anchor, ungrouped))
+        draft = before
+        stored = before
         showSheet()
         expand("A")
         compose.onNodeWithTag("lorebook-entry-list").performScrollToNode(hasContentDescription("拖动排序 Alpha"))
         dragTo(compose.onNodeWithContentDescription("拖动排序 Alpha"), compose.onNodeWithTag("lorebook-group:B"))
         compose.runOnIdle {
             assertEquals(1, writes)
-            assertEquals(listOf(b, anchor, a.copy(group = "B"), ungrouped), draft.entries)
-            assertEquals(original, stored)
+            assertEquals(listOf(anchor, a.copy(group = "B"), ungrouped), draft.entries)
+            assertEquals(before, stored)
         }
+        compose.onNodeWithTag("lorebook-entry-list").performScrollToNode(hasContentDescription("拖动排序 Alpha"))
+        captureLorebookRepairEvidence("ordinary-group-drop")
         val confirm = InstrumentationRegistry.getInstrumentation().targetContext.getString(R.string.prompt_page_confirm)
         compose.onNodeWithText(confirm).performClick()
         compose.onNodeWithText("Reopen").performClick()
