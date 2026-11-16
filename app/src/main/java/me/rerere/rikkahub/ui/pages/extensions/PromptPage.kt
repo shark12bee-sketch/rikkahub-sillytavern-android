@@ -1499,7 +1499,7 @@ internal fun LorebookEditSheet(
                 .fillMaxWidth()
                 .fillMaxHeight(0.95f)
                 .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Text(
                 text = stringResource(R.string.prompt_page_edit_lorebook),
@@ -1507,7 +1507,7 @@ internal fun LorebookEditSheet(
                 modifier = Modifier.align(Alignment.CenterHorizontally)
             )
 
-            Box(Modifier.fillMaxWidth()) {
+            if (pendingEntry == null && activeBatch == null && !selecting) Box(Modifier.fillMaxWidth()) {
                 TextButton(onClick = { menuExpanded = true }, enabled = pendingEntry == null && activeBatch == null && !selecting && !savingBatch && !copyBusy) {
                     Text("批量管理条目")
                 }
@@ -1539,9 +1539,6 @@ internal fun LorebookEditSheet(
                     }
                 },
                 onCancel = ::cancelBatch,
-            )
-            if (pendingEntry != null || activeBatch != null) Text(
-                "请先完成或取消当前待插入任务，再开始新任务", style = MaterialTheme.typography.bodySmall,
             )
             if (savingBatch) Text("正在保存，请稍候…", style = MaterialTheme.typography.bodySmall)
             batchError?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
@@ -1745,207 +1742,189 @@ internal fun RegexInjectionEntryCard(
     ) {
         val stripeColor = MaterialTheme.colorScheme.surfaceVariant
         // Draw inside the measured card. A fillMaxHeight child would expand a bounded safety area.
-        Row(modifier = Modifier.fillMaxWidth().drawBehind {
-            drawRect(stripeColor, size = Size(4.dp.toPx(), size.height))
-        }) {
-            selection()
-            Column(
-                modifier = Modifier
-                    .weight(1f)
-                    .padding(start = 16.dp, top = 8.dp, end = 4.dp, bottom = 12.dp)
-            ) {
-            // 第一行：名称 + 启用开关 + 操作按钮
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(4.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                // 条目名称（可点击编辑）
-                if (editingName) {
-                    OutlinedTextField(
-                        value = editNameValue,
-                        onValueChange = { editNameValue = it },
-                        singleLine = true,
-                        modifier = Modifier.weight(1f),
-                        textStyle = MaterialTheme.typography.bodyMedium,
-                    )
-                    IconButton(
-                        onClick = {
-                            onUpdate(entry.copy(name = editNameValue))
-                            editingName = false
-                        },
-                        modifier = Modifier.size(28.dp)
-                    ) {
-                        Icon(HugeIcons.Add01, null, modifier = Modifier.size(16.dp))
+        LorebookEntryCardLayout(dragHandle = dragHandle) {
+            Row(modifier = Modifier.fillMaxWidth().drawBehind {
+                drawRect(stripeColor, size = Size(4.dp.toPx(), size.height))
+            }) {
+                selection()
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(start = 12.dp, top = 8.dp, end = 8.dp, bottom = 8.dp)
+                ) {
+                val weightLabel = stringResource(R.string.prompt_page_group_weight_preview, entry.groupWeight)
+                val constantLabel = stringResource(R.string.prompt_page_constant_preview)
+                val metadata = if (collapsed) {
+                    "P${entry.probability}% · " + (entry.keywords + entry.secondaryKeys).joinToString(", ")
+                } else listOfNotNull(
+                    "P${entry.probability}%",
+                    entry.group.takeIf { it.isNotBlank() },
+                    weightLabel.takeIf { entry.group.isNotBlank() },
+                    constantLabel.takeIf { entry.constantActive },
+                ).joinToString(" · ")
+                // The title owns the main column; actions no longer consume its width.
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    // 条目名称（可点击编辑）
+                    if (editingName) {
+                        OutlinedTextField(
+                            value = editNameValue,
+                            onValueChange = { editNameValue = it },
+                            singleLine = true,
+                            modifier = Modifier.weight(1f),
+                            textStyle = MaterialTheme.typography.bodyMedium,
+                        )
+                        IconButton(
+                            onClick = {
+                                onUpdate(entry.copy(name = editNameValue))
+                                editingName = false
+                            },
+                            modifier = Modifier.size(28.dp)
+                        ) {
+                            Icon(HugeIcons.Add01, null, modifier = Modifier.size(16.dp))
+                        }
+                    } else {
+                        Text(
+                            text = entry.name.ifEmpty { stringResource(R.string.prompt_page_unnamed_entry) },
+                            style = MaterialTheme.typography.titleSmall,
+                            modifier = Modifier
+                                .weight(1f)
+                                .clickable { editingName = true; editNameValue = entry.name },
+                            maxLines = if (collapsed) 1 else 2,
+                            overflow = TextOverflow.Ellipsis,
+                        )
                     }
-                } else {
+
+                }
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
                     Text(
-                        text = entry.name.ifEmpty { stringResource(R.string.prompt_page_unnamed_entry) },
-                        style = MaterialTheme.typography.titleSmall,
-                        modifier = Modifier
-                            .weight(1f)
-                            .clickable { editingName = true; editNameValue = entry.name },
+                        metadata, Modifier.weight(1f), style = MaterialTheme.typography.labelSmall,
+                        maxLines = if (collapsed) 1 else 2, overflow = TextOverflow.Ellipsis,
+                    )
+                    Switch(
+                        checked = entry.enabled,
+                        onCheckedChange = { onUpdate(entry.copy(enabled = it)) },
+                        modifier = Modifier.size(width = 52.dp, height = 48.dp),
+                    )
+                    IconButton(onClick = onEdit, modifier = Modifier.size(48.dp)) {
+                        Icon(HugeIcons.Tools, stringResource(R.string.prompt_page_edit), modifier = Modifier.size(18.dp))
+                    }
+                    IconButton(onClick = onDelete, modifier = Modifier.size(48.dp)) {
+                        Icon(HugeIcons.Delete01, stringResource(R.string.prompt_page_delete), modifier = Modifier.size(18.dp))
+                    }
+                }
+
+                Column {
+                if (collapsed) {
+                    Text(
+                        text = entry.content.replace('\n', ' '),
+                        style = MaterialTheme.typography.bodySmall,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.clickable(onClick = onEdit),
                     )
-                }
-
-                Switch(
-                    checked = entry.enabled,
-                    onCheckedChange = { onUpdate(entry.copy(enabled = it)) },
-                    modifier = Modifier.size(width = 52.dp, height = 48.dp),
-                )
-                IconButton(onClick = onEdit, modifier = Modifier.size(48.dp)) {
-                    Icon(HugeIcons.Tools, stringResource(R.string.prompt_page_edit), modifier = Modifier.size(18.dp))
-                }
-                IconButton(onClick = onDelete, modifier = Modifier.size(48.dp)) {
-                    Icon(HugeIcons.Delete01, stringResource(R.string.prompt_page_delete), modifier = Modifier.size(18.dp))
-                }
-                dragHandle()
-            }
-
-            Column(Modifier.padding(end = 8.dp)) {
-            if (collapsed) {
-                Text(
-                    text = "P${entry.probability}% · " +
-                        (entry.keywords + entry.secondaryKeys).joinToString(", "),
-                    style = MaterialTheme.typography.labelSmall,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                Text(
-                    text = entry.content.replace('\n', ' '),
-                    style = MaterialTheme.typography.bodySmall,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.clickable(onClick = onEdit),
-                )
-            } else {
-            // 触发词（紧凑显示）
-            if (entry.keywords.isNotEmpty() || entry.secondaryKeys.isNotEmpty()) {
-                Text(
-                    text = entry.keywords.joinToString(", ").let {
-                        if (it.length > 100) it.take(100) + "…" else it
-                    },
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.padding(top = 2.dp),
-                )
-            }
-
-            // 状态信息行: 概率 + 分组 + 权重
-            Row(
-                modifier = Modifier.padding(top = 2.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    "P${entry.probability}%",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.primary,
-                )
-                if (entry.group.isNotBlank()) {
-                    Text(
-                        entry.group,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.tertiary,
-                    )
-                    Text(
-                        stringResource(R.string.prompt_page_group_weight_preview, entry.groupWeight),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-                    )
-                }
-                if (entry.constantActive) {
-                    Text(
-                        stringResource(R.string.prompt_page_constant_preview),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-                    )
-                }
-            }
-
-            // 注入内容预览（可展开编辑）
-            var contentExpanded by remember { mutableStateOf(false) }
-            var editContent by remember(entry.content) { mutableStateOf(entry.content) }
-            Column(modifier = Modifier.fillMaxWidth().padding(top = 4.dp)) {
-                if (contentExpanded) {
-                    OutlinedTextField(
-                        value = editContent,
-                        onValueChange = { editContent = it },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .heightIn(min = 80.dp, max = 200.dp),
-                        textStyle = MaterialTheme.typography.bodySmall,
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = MaterialTheme.colorScheme.outlineVariant,
-                            unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f),
-                        ),
-                    )
-                    Row(
-                        modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
-                        horizontalArrangement = Arrangement.End,
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        TextButton(
-                            onClick = {
-                                contentExpanded = false
-                                editContent = entry.content
-                            },
-                            contentPadding = PaddingValues(horizontal = 8.dp),
-                        ) {
-                            Text(stringResource(R.string.prompt_page_cancel), style = MaterialTheme.typography.labelSmall)
-                        }
-                        Spacer(Modifier.width(4.dp))
-                        TextButton(
-                            onClick = {
-                                onUpdate(entry.copy(content = editContent))
-                                contentExpanded = false
-                            },
-                            contentPadding = PaddingValues(horizontal = 8.dp),
-                        ) {
-                            Text(stringResource(R.string.prompt_page_confirm), style = MaterialTheme.typography.labelSmall)
-                        }
-                    }
-                } else if (entry.content.isNotBlank()) {
-                    Surface(
-                        onClick = { contentExpanded = true; editContent = entry.content },
-                        shape = RoundedCornerShape(4.dp),
-                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
-                        modifier = Modifier.fillMaxWidth(),
-                    ) {
-                        Text(
-                            text = entry.content.lines().take(3).joinToString("\n")
-                                .let { if (it.length < entry.content.length) "$it…" else it },
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 3,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.padding(10.dp),
-                        )
-                    }
                 } else {
-                    Surface(
-                        onClick = { contentExpanded = true },
-                        shape = RoundedCornerShape(4.dp),
-                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.2f),
-                        modifier = Modifier.fillMaxWidth(),
-                    ) {
-                        Text(
-                            text = stringResource(R.string.prompt_page_add_content),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(10.dp),
+                // 触发词（紧凑显示）
+                if (entry.keywords.isNotEmpty() || entry.secondaryKeys.isNotEmpty()) {
+                    Text(
+                        text = entry.keywords.joinToString(", ").let {
+                            if (it.length > 100) it.take(100) + "…" else it
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.padding(top = 2.dp),
+                    )
+                }
+
+                // 注入内容预览（可展开编辑）
+                var contentExpanded by remember { mutableStateOf(false) }
+                var editContent by remember(entry.content) { mutableStateOf(entry.content) }
+                Column(modifier = Modifier.fillMaxWidth().padding(top = 4.dp)) {
+                    if (contentExpanded) {
+                        OutlinedTextField(
+                            value = editContent,
+                            onValueChange = { editContent = it },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .heightIn(min = 80.dp, max = 200.dp),
+                            textStyle = MaterialTheme.typography.bodySmall,
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = MaterialTheme.colorScheme.outlineVariant,
+                                unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f),
+                            ),
                         )
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+                            horizontalArrangement = Arrangement.End,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            TextButton(
+                                onClick = {
+                                    contentExpanded = false
+                                    editContent = entry.content
+                                },
+                                contentPadding = PaddingValues(horizontal = 8.dp),
+                            ) {
+                                Text(stringResource(R.string.prompt_page_cancel), style = MaterialTheme.typography.labelSmall)
+                            }
+                            Spacer(Modifier.width(4.dp))
+                            TextButton(
+                                onClick = {
+                                    onUpdate(entry.copy(content = editContent))
+                                    contentExpanded = false
+                                },
+                                contentPadding = PaddingValues(horizontal = 8.dp),
+                            ) {
+                                Text(stringResource(R.string.prompt_page_confirm), style = MaterialTheme.typography.labelSmall)
+                            }
+                        }
+                    } else if (entry.content.isNotBlank()) {
+                        Surface(
+                            onClick = { contentExpanded = true; editContent = entry.content },
+                            shape = RoundedCornerShape(4.dp),
+                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Text(
+                                text = entry.content.lines().take(3).joinToString("\n")
+                                    .let { if (it.length < entry.content.length) "$it…" else it },
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 3,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.padding(10.dp),
+                            )
+                        }
+                    } else {
+                        Surface(
+                            onClick = { contentExpanded = true },
+                            shape = RoundedCornerShape(4.dp),
+                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.2f),
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Text(
+                                text = stringResource(R.string.prompt_page_add_content),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(10.dp),
+                            )
+                        }
                     }
                 }
-            }
-            }
+                }
+                }
             }
         }
-    }
+        }
 }
 
 }

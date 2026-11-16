@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
@@ -23,6 +24,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.graphicsLayer
@@ -54,6 +56,7 @@ internal fun LorebookInsertionSafetyArea(
     onInsertAtEdge: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
     longPressDrag: Boolean = false,
+    compact: Boolean = false,
     enabled: Boolean = true,
     cancelEnabled: Boolean = true,
     idleHint: String = "安全区：拖动手柄选择同组位置；快捷插入首尾会立即保存",
@@ -125,8 +128,10 @@ internal fun LorebookInsertionSafetyArea(
         shape = MaterialTheme.shapes.large,
         color = MaterialTheme.colorScheme.surfaceContainerHigh,
     ) {
-        Column(Modifier.padding(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text(title, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Column(
+            Modifier.padding(if (compact) 6.dp else 8.dp),
+            verticalArrangement = Arrangement.spacedBy(if (compact) 2.dp else 4.dp),
+        ) {
             val status = when (dragFeedback.phase) {
                 LorebookDragPhase.IDLE -> idleHint
                 LorebookDragPhase.SAFE -> "安全区内 · 插入已暂停；向下拖出安全区继续"
@@ -135,11 +140,26 @@ internal fun LorebookInsertionSafetyArea(
                 } else "此处没有同组目标 · 请拖至所属分组"
                 LorebookDragPhase.OUTSIDE -> "插入已暂停 · 请移回下方列表继续，或返回安全区"
             }
-            Text(status, style = MaterialTheme.typography.bodySmall, minLines = 2, maxLines = 2)
+            if (compact) {
+                val compactStatus = when (dragFeedback.phase) {
+                    LorebookDragPhase.IDLE -> if (enabled) "长按拖动" else idleHint
+                    LorebookDragPhase.SAFE, LorebookDragPhase.OUTSIDE -> "已暂停"
+                    LorebookDragPhase.INSERTION -> if (dragFeedback.placement != null) "松手插入" else "请选择同组"
+                }
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Text(title, Modifier.weight(1f), style = MaterialTheme.typography.titleSmall,
+                        maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(compactStatus, Modifier.widthIn(max = 110.dp), style = MaterialTheme.typography.labelSmall,
+                        maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+            } else {
+                Text(title, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(status, style = MaterialTheme.typography.bodySmall, minLines = 2, maxLines = 2)
+            }
+            val previewModifier = if (compact) Modifier else Modifier.weight(1f, fill = false)
+                .verticalScroll(rememberScrollState())
             Box(
-                Modifier.weight(1f, fill = false)
-                    .verticalScroll(rememberScrollState())
-                    .graphicsLayer {
+                previewModifier.graphicsLayer {
                         alpha = if (dragFeedback.phase == LorebookDragPhase.INSERTION) 0.45f else 1f
                         scaleX = if (longPressDrag && state.pointer != null) 0.98f else 1f
                         scaleY = scaleX

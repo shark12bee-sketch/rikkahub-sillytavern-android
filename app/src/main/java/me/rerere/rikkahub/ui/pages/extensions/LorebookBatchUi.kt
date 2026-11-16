@@ -9,7 +9,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Checkbox
@@ -59,20 +58,20 @@ internal fun LorebookBatchPreviewContent(
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         LazyRow(
             modifier = Modifier.weight(1f).testTag("lorebook-batch-thumbnails"),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             items(preview.entries, key = { it.id }) { entry ->
                 Surface(shape = MaterialTheme.shapes.medium, color = MaterialTheme.colorScheme.secondaryContainer) {
-                    Box(Modifier.size(64.dp)) {
+                    Box(Modifier.size(48.dp).testTag("lorebook-thumbnail-${entry.id}")) {
                         Text(
                             lorebookThumbnailCharacter(entry.name),
-                            Modifier.align(Alignment.Center),
+                            Modifier.align(Alignment.Center).padding(top = 6.dp),
                             style = MaterialTheme.typography.titleLarge,
                             maxLines = 1,
                             overflow = TextOverflow.Clip,
                         )
                         Box(
-                            Modifier.align(Alignment.TopEnd).size(28.dp)
+                            Modifier.align(Alignment.TopEnd).size(24.dp)
                                 .clickable(enabled = enabled) { onRemove(entry.id) }
                                 .semantics { contentDescription = "移除选择 ${entry.name}" },
                             contentAlignment = Alignment.Center,
@@ -81,10 +80,7 @@ internal fun LorebookBatchPreviewContent(
                 }
             }
         }
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            LorebookDragHandle("长按拖动 ${preview.entries.size} 条", handleModifier)
-            Text("${preview.entries.size} 条", style = MaterialTheme.typography.labelSmall)
-        }
+        LorebookDragHandle("长按拖动 ${preview.entries.size} 条", handleModifier)
     }
 }
 
@@ -138,11 +134,11 @@ internal fun LorebookCopyShelf(task: LorebookCopyTask, busy: Boolean, onRemove: 
     LorebookInsertionSafetyArea(
         state = state,
         feedback = { LorebookDragFeedback(LorebookDragPhase.IDLE) },
-        title = "待复制 ${task.entries.size} 条 · ${task.entries.first().group.ifBlank { "未分组" }}",
+        title = "待复制 · 已选 ${task.entries.size} 条",
         idleHint = "请选择另一份世界书，再确认落点；保留来源分组和触发配置",
         onConfirm = {}, onInsertAtEdge = {}, onCancel = onCancel,
-        enabled = false, cancelEnabled = !busy, longPressDrag = true,
-        modifier = Modifier.fillMaxWidth().heightIn(max = 220.dp).testTag("lorebook-copy-shelf"),
+        enabled = false, cancelEnabled = !busy, longPressDrag = true, compact = true,
+        modifier = Modifier.fillMaxWidth().testTag("lorebook-copy-shelf"),
     ) { handle -> LorebookBatchPreviewContent(task.preview(), handle, onRemove, !busy) }
 }
 
