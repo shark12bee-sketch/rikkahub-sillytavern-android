@@ -1649,7 +1649,7 @@ internal fun LorebookEditSheet(
         AlertDialog(
             onDismissRequest = { copyConfirmation = null },
             title = { Text("确认跨书复制") },
-            text = { Text(lorebookCopyConfirmation(request)) },
+            text = { Text(lorebookCopyConfirmation(request), Modifier.verticalScroll(rememberScrollState())) },
             confirmButton = {
                 TextButton(onClick = { copyConfirmation = null; executeBatch(request) }) { Text("确认复制") }
             },
