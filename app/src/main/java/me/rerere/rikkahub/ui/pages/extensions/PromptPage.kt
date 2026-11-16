@@ -1414,6 +1414,12 @@ private fun LorebookEditSheet(
                 pendingEntry = pendingEntry,
                 onUpdatePending = { pendingEntryJson = JsonInstant.encodeToString(it) },
                 onCancelPending = { pendingEntryJson = null },
+                onInsertPendingAtEdge = { atEnd ->
+                    pendingEntry?.let { pending ->
+                        onEdit(book.copy(entries = insertLorebookEntryAtEdge(book.entries, pending, atEnd)))
+                        pendingEntryJson = null
+                    }
+                },
                 onInsertPending = { placement ->
                     pendingEntry?.let { pending ->
                         val entries = insertLorebookEntry(book.entries, pending, placement)
