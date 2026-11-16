@@ -123,13 +123,14 @@ internal fun LorebookEntryList(
     }
 
     BoxWithConstraints(modifier = modifier) {
+        val safetyHeightLimit = maxHeight * 0.55f
         Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             // Reserve at least 45% for the independent list, even with large text or an expanded editor.
             if (pendingEntry != null) {
                 LorebookInsertionSafetyArea(
                     state = insertion,
                     feedback = { feedback },
-                    modifier = Modifier.heightIn(max = maxHeight * 0.55f).testTag("lorebook-insertion-safety-area"),
+                    modifier = Modifier.heightIn(max = safetyHeightLimit).testTag("lorebook-insertion-safety-area"),
                     title = "待插入 · ${pendingEntry.group.ifBlank { "未分组" }}",
                     onConfirm = onInsertPending,
                     onCancel = onCancelPending,
@@ -150,7 +151,9 @@ internal fun LorebookEntryList(
                     .onGloballyPositioned { listBounds = it.dragBoundsInRoot() },
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                item(key = "book-fields") {
+                // During insertion, keep the existing entries in view instead of book metadata.
+                // The draft is unchanged; the fields return as soon as insertion is resolved.
+                if (pendingEntry == null) item(key = "book-fields") {
                     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) { header() }
                 }
                 item(key = "entry-controls") {
