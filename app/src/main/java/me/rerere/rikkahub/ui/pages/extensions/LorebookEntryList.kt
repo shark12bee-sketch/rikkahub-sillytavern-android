@@ -59,6 +59,8 @@ internal fun LorebookEntryList(
     onRemoveBatchEntry: (Uuid) -> Unit = {},
     onCommitBatch: (LorebookEntryPlacement?, Boolean?) -> Unit = { _, _ -> },
     batchEnabled: Boolean = true,
+    batchBusy: Boolean = false,
+    batchHint: String? = null,
     header: @Composable () -> Unit,
     onEntriesChange: (List<PromptInjection.RegexInjection>) -> Unit,
     onEditEntry: (PromptInjection.RegexInjection) -> Unit,
@@ -146,10 +148,13 @@ internal fun LorebookEntryList(
                     onConfirm = { if (batch != null) onCommitBatch(it, null) else onInsertPending(it) },
                     longPressDrag = batch != null,
                     enabled = batchEnabled,
+                    cancelEnabled = !batchBusy,
+                    idleHint = batchHint ?: if (batch != null) "长按右侧手柄整组拖动，选择同组落点；快捷插入首尾会立即保存"
+                        else "安全区：拖动手柄选择同组位置；快捷插入首尾会立即保存",
                     onCancel = onCancelPending,
                     onInsertAtEdge = { if (batch != null) onCommitBatch(null, it) else onInsertPendingAtEdge(it) },
                 ) { handleModifier ->
-                    if (batch != null) LorebookBatchPreviewContent(batch, handleModifier, onRemoveBatchEntry, batchEnabled)
+                    if (batch != null) LorebookBatchPreviewContent(batch, handleModifier, onRemoveBatchEntry, !batchBusy)
                     else if (pendingEntry != null) NewLorebookEntryPreview(
                         entry = pendingEntry,
                         handleModifier = handleModifier,
