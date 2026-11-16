@@ -20,6 +20,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -135,30 +136,29 @@ internal fun LorebookSelectionControls(
     enabled: Boolean = true,
 ) {
     val actual = orderedLorebookSelection(entries, selected)
-    val group = lorebookSelectionGroup(entries, selected)
-    val inGroup = entries.filter { it.group.ifBlank { "" } == group }.map { it.id }.toSet()
-    val oneGroup = actual.map { it.group.ifBlank { "" } }.distinct().size <= 1
+    var selectionGroup by rememberSaveable { mutableStateOf("") }
+    val inGroup = entries.filter { it.group.ifBlank { "" } == selectionGroup }.map { it.id }.toSet()
     var destination by remember { mutableStateOf("") }
     Column {
         Text("${mode.label} · 已选 ${actual.size} 条", style = MaterialTheme.typography.labelLarge)
-        Text("一次仅选择同一分组；全选范围：${group?.let(::groupLabel) ?: "暂无条目"}", style = MaterialTheme.typography.bodySmall)
-        if (!oneGroup) Text("当前选择跨组，请先取消其它分组的勾选", color = MaterialTheme.colorScheme.error)
+        LorebookGroupTargetSelector(groups + entries.map { it.group }, selectionGroup, enabled,
+            prefix = "全选范围", tag = "lorebook-selection-scope") { selectionGroup = it }
         if (mode == LorebookBatchMode.COPY) Text(
             "完成后返回世界书列表。来源书不会修改，来源草稿的未保存修改不会写入。",
             style = MaterialTheme.typography.bodySmall,
         )
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            TextButton(onClick = { onSelect(toggleLorebookScope(entries, selected)) }, enabled = enabled && inGroup.isNotEmpty()) {
+            TextButton(onClick = { onSelect(toggleLorebookScope(entries, selected, selectionGroup)) }, enabled = enabled && inGroup.isNotEmpty()) {
                 Text(if (inGroup.isNotEmpty() && selected.containsAll(inGroup)) "取消全选" else "全选该组")
             }
             TextButton(onClick = onCancel, enabled = enabled) { Text("取消批量操作") }
-            TextButton(onClick = onDone, enabled = enabled && oneGroup && actual.isNotEmpty()) {
+            TextButton(onClick = onDone, enabled = enabled && actual.isNotEmpty()) {
                 Text(if (mode == LorebookBatchMode.DELETE) "删除所选" else "完成选择")
             }
         }
         if (mode == LorebookBatchMode.MOVE && onMoveToGroup != null) Row {
             LorebookGroupTargetSelector(groups, destination, enabled, prefix = "目标") { destination = it }
-            TextButton(onClick = { onMoveToGroup(destination) }, enabled = enabled && oneGroup && actual.isNotEmpty()) { Text("移入分组") }
+            TextButton(onClick = { onMoveToGroup(destination) }, enabled = enabled && actual.isNotEmpty()) { Text("移入分组") }
         }
     }
 }
@@ -220,7 +220,7 @@ internal fun lorebookCopyConfirmation(request: LorebookBatchRequest): String {
 }
 
 internal fun lorebookInsertionInstructions(mode: LorebookBatchMode?): String = when (mode) {
-    LorebookBatchMode.DELETE -> "选择同一分组的条目，确认数量后删除；取消不修改数据。"
+    LorebookBatchMode.DELETE -> "选择需要删除的条目，确认数量后删除；取消不修改数据。"
     null -> "拖动右侧手柄拿起新增条目。拖出安全区选择插入位置；返回安全区暂停。拖到组头会插入组内最后；首尾按钮只作用于当前范围。取消不会写入条目。"
     else -> "短按方块：预览条目。\n长按方块：单条拖动。\n长按右侧三条杠：整组拖动。\n拖出安全区：选择插入位置。\n返回安全区：暂停插入判断。\n拖到组头：插入该组最后；首尾按钮只作用于当前范围。" +
         if (mode == LorebookBatchMode.COPY) "\n复制不会删除来源条目；副本生成独立 ID，确认目标后才保存。" else "\n确认落点前不修改原列表；保存成功后只移除已插入的暂存条目。"

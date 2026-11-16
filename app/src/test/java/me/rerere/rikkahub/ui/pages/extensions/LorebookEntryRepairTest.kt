@@ -17,18 +17,24 @@ class LorebookEntryRepairTest {
     private val v = a.copy(id = Uuid.random(), name = "v", group = "")
     private val book = Lorebook(entries = listOf(a, b, c, u, v), entryGroups = listOf("A", "B", "Empty"))
 
-    @Test fun `first checked group chooses scope and ungrouped includes legacy whitespace`() {
-        assertEquals("A", lorebookSelectionGroup(book.entries, emptySet()))
-        assertEquals(setOf(a.id, b.id), toggleLorebookScope(book.entries, emptySet()))
-        assertEquals("", lorebookSelectionGroup(book.entries, setOf(u.id)))
-        assertEquals(setOf(u.id, v.id), toggleLorebookScope(book.entries, setOf(u.id)))
-        assertTrue(toggleLorebookScope(book.entries, setOf(u.id, v.id)).isEmpty())
-        assertNull(lorebookSelectionGroup(emptyList(), emptySet()))
+    @Test fun `explicit ungrouped scope includes legacy blanks and preserves manual choices`() {
+        val manual = setOf(a.id, c.id)
+        assertEquals(manual + setOf(u.id, v.id), toggleLorebookScope(book.entries, manual, ""))
+        assertEquals(manual, toggleLorebookScope(book.entries, manual + setOf(u.id, v.id), ""))
+        assertEquals(setOf(u.id, v.id), toggleLorebookScope(book.entries, emptySet(), ""))
     }
 
-    @Test fun `scope toggle never silently discards restored selections from another group`() {
-        assertEquals(setOf(a.id, b.id, c.id), toggleLorebookScope(book.entries, setOf(a.id, c.id)))
-        assertEquals(setOf(c.id), toggleLorebookScope(book.entries, setOf(a.id, b.id, c.id)))
+    @Test fun `explicit scope ignores first checked group and toggles only its own ids`() {
+        assertEquals(setOf(a.id, b.id, c.id), toggleLorebookScope(book.entries, setOf(c.id), "A"))
+        assertEquals(setOf(c.id), toggleLorebookScope(book.entries, setOf(a.id, b.id, c.id), "A"))
+        assertEquals(setOf(a.id, c.id), toggleLorebookScope(book.entries, setOf(a.id), "B"))
+    }
+
+    @Test fun `empty or missing scope cannot clear any manual selection`() {
+        for (group in listOf("Empty", "Missing")) {
+            assertEquals(setOf(a.id, c.id), toggleLorebookScope(book.entries, setOf(a.id, c.id), group))
+        }
+        assertEquals(emptySet<Uuid>(), toggleLorebookScope(emptyList(), emptySet(), ""))
     }
 
     @Test fun `partial deletion preserves unselected objects order and all group metadata`() {

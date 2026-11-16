@@ -12,12 +12,12 @@ import androidx.compose.ui.unit.dp
 import me.rerere.rikkahub.data.model.Lorebook
 
 @Composable
-internal fun LorebookGroupTargetSelector(groups: List<String>, selected: String, enabled: Boolean, prefix: String = "范围", onSelect: (String) -> Unit) {
+internal fun LorebookGroupTargetSelector(groups: List<String>, selected: String, enabled: Boolean, prefix: String = "范围", tag: String = "lorebook-target-group", onSelect: (String) -> Unit) {
     var expanded by remember { mutableStateOf(false) }
     Box {
         CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides 32.dp) {
             TextButton(onClick = { expanded = true }, enabled = enabled,
-                modifier = Modifier.height(32.dp).widthIn(max = 112.dp).testTag("lorebook-target-group"),
+                modifier = Modifier.height(32.dp).widthIn(max = 112.dp).testTag(tag),
                 contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp)) {
                 Text("$prefix：${groupLabel(selected)}", maxLines = 1, overflow = TextOverflow.Ellipsis,
                     style = MaterialTheme.typography.labelSmall)
