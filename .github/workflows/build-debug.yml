@@ -1,0 +1,64 @@
+name: Build Debug APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ci/lorebook-entry-editor]
+
+permissions:
+  contents: read
+
+jobs:
+  build-debug:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: ./.github/actions/setup-android-native
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Prepare unsigned debug-only verification
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          build = Path('app/build.gradle.kts')
+          text = build.read_text()
+          old = 'check(kdfFactor == HD_GUARD_EXPECTED_FACTOR)'
+          assert text.count(old) == 1
+          build.write_text(text.replace(old, 'check(signSecret.isEmpty() || kdfFactor == HD_GUARD_EXPECTED_FACTOR)'))
+          crypto = Path('app/src/main/java/me/rerere/rikkahub/plugin/crypto/PluginCrypto.kt')
+          text = crypto.read_text()
+          old = 'private fun deriveKey(context: Context): SecretKey {'
+          assert text.count(old) == 1
+          crypto.write_text(text.replace(old, old + '\n        check(!BuildConfig.DEBUG) { "Encrypted plugins unavailable in unsigned CI debug builds" }'))
+          PY
+          chmod +x gradlew
+      - name: Test lorebook editing and prompt injection
+        run: |
+          set -o pipefail
+          ./gradlew :app:testDebugUnitTest \
+            --tests 'me.rerere.rikkahub.ui.pages.extensions.LorebookEntryOrderTest' \
+            --tests 'me.rerere.rikkahub.data.ai.transformers.PromptInjectionTransformerTest' \
+            -x :web:buildWebUi --stacktrace 2>&1 | tee test.log
+      - name: Build debug APK
+        run: ./gradlew assembleDebug -x :web:buildWebUi --stacktrace
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: lorebook-entry-editor-test-results
+          path: |
+            app/build/test-results/testDebugUnitTest/
+            app/build/reports/tests/testDebugUnitTest/
+            test.log
+      - uses: actions/upload-artifact@v4
+        with:
+          name: lorebook-entry-editor-debug
+          path: app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
