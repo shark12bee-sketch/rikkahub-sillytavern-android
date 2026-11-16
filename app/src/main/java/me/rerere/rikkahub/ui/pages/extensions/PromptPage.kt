@@ -1556,7 +1556,7 @@ internal fun LorebookEditSheet(
                     val latestIds = selectedStrings.map { Uuid.parse(it) }.toSet()
                     val group = book.entries.firstOrNull { it.id in latestIds }?.group
                     val entry = book.entries.firstOrNull { it.id == id }
-                    if (entry != null && (group == null || group == entry.group)) {
+                    if (entry != null && (id in latestIds || group == null || group == entry.group)) {
                         selectedStrings = (if (id in latestIds) latestIds - id else latestIds + id).map(Uuid::toString)
                     }
                 },

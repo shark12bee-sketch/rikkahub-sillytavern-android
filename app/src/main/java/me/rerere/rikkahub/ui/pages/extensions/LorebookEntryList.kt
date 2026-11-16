@@ -221,7 +221,7 @@ internal fun LorebookEntryList(
                                             val ids = selectedIds
                                             val selectedGroup = book.entries.firstOrNull { it.id in ids }?.group
                                             LorebookEntrySelection(
-                                                entry.id in ids, selectedGroup == null || entry.group == selectedGroup,
+                                                entry.id in ids, entry.id in ids || selectedGroup == null || entry.group == selectedGroup,
                                                 entry.name, { onSelectEntry(entry.id) },
                                             )
                                             }
