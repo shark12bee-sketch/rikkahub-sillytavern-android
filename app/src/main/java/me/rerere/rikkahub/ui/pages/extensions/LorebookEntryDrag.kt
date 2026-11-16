@@ -38,8 +38,9 @@ internal fun evaluateLorebookEntryDrag(
     if (safety?.contains(pointer) == true) return LorebookDragFeedback(LorebookDragPhase.SAFE)
     if (viewport == null || !viewport.contains(pointer)) return LorebookDragFeedback(LorebookDragPhase.OUTSIDE)
 
-    val target = targets.filter { it.bottom > viewport.top && it.top < viewport.bottom }
-        .minByOrNull { abs(pointer.y - (it.top + it.bottom) / 2f) }
+    val visible = targets.filter { it.bottom > viewport.top && it.top < viewport.bottom }
+    val target = visible.firstOrNull { pointer.y >= it.top && pointer.y < it.bottom }
+        ?: visible.minByOrNull { minOf(abs(pointer.y - it.top), abs(pointer.y - it.bottom)) }
     val placement = target?.takeIf { it.group == group }?.let {
         LorebookEntryPlacement(it.id, after = pointer.y > (it.top + it.bottom) / 2f)
     }

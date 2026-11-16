@@ -145,9 +145,11 @@ internal fun LorebookEntryList(
                     .onGloballyPositioned { handleCoordinates.value = it }
                     .pointerInput(pendingEntry.id) {
                         detectDragGestures(
-                            onDragStart = { position -> updatePointer(position) },
+                            orientationLock = null,
+                            onDragStart = { _, change, _ -> updatePointer(change.position) },
                             onDragCancel = { pointer = null },
-                            onDragEnd = {
+                            onDragEnd = { change ->
+                                updatePointer(change.position)
                                 val target = feedback.placement
                                 pointer = null
                                 if (target != null) currentInsertPending(target)
