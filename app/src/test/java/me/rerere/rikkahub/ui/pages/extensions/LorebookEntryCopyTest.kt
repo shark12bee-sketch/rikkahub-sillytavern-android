@@ -21,6 +21,7 @@ class LorebookEntryCopyTest {
             secondaryKeys = listOf("other"), enabled = false, priority = 73, probability = 49,
             position = InjectionPosition.AT_DEPTH, injectDepth = 6, role = MessageRole.USER,
             selective = true, sticky = 2, cooldown = 3, displayIndex = 91,
+            inclusionGroup = "shared", groupWeight = 37,
         )
     }
     private val source = Lorebook(name = "source", entries = entries)

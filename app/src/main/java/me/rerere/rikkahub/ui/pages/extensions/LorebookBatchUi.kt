@@ -149,10 +149,18 @@ internal fun LorebookCopyShelf(task: LorebookCopyTask, busy: Boolean, onRemove: 
 internal fun lorebookCopyConfirmation(request: LorebookBatchRequest): String {
     val task = (request.action as LorebookBatchAction.Copy).task
     val group = task.entries.first().group
+    val existingGroups = request.draft.entries.flatMap { entry ->
+        listOf(entry.group) + entry.inclusionGroup.split(",").map { it.trim() }
+    }.toSet()
     val grouping = when {
         group.isBlank() -> "保留未分组状态。"
-        request.draft.entries.any { it.group == group } -> "加入目标已有的「$group」分组，参与该组的触发与竞争规则。"
+        group in existingGroups -> "保留「$group」分组；目标已有同名的普通或包含分组，按现有规则参与触发与竞争。"
         else -> "在目标中新建同名分组「$group」，保留原分组设置。"
+    }
+    val inclusionGroups = task.entries.flatMap { it.inclusionGroup.split(",") }
+        .map { it.trim() }.filter { it.isNotEmpty() }.distinct()
+    val inclusion = if (inclusionGroups.isEmpty()) "" else {
+        "\n同时保留包含分组：${inclusionGroups.joinToString("、")}。同名者仍按现有触发与竞争规则处理。"
     }
     val position = when (request.atEnd) {
         true -> "整本列表最后"
@@ -161,5 +169,5 @@ internal fun lorebookCopyConfirmation(request: LorebookBatchRequest): String {
             "「${it.name.ifBlank { "未命名条目" }}」${if (request.placement?.after == true) "之后" else "之前"}"
         } ?: "所选位置"
     }
-    return "将 ${task.entries.size} 条复制到「${request.draft.name.ifBlank { "未命名世界书" }}」的$position。\n$grouping\n来源世界书不变；副本生成新 ID，其余条目配置完整保留。当前目标书草稿也会一并保存。"
+    return "将 ${task.entries.size} 条复制到「${request.draft.name.ifBlank { "未命名世界书" }}」的$position。\n$grouping$inclusion\n来源世界书不变；副本生成新 ID，其余条目配置完整保留。当前目标书草稿也会一并保存。"
 }
