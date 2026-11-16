@@ -19,7 +19,6 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.Ref
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -69,7 +68,7 @@ internal fun LorebookEntryList(
     var pointer by remember { mutableStateOf<LorebookDragPoint?>(null) }
     var safetyBounds by remember { mutableStateOf<LorebookDragBounds?>(null) }
     var listBounds by remember { mutableStateOf<LorebookDragBounds?>(null) }
-    val handleCoordinates = remember { Ref<LayoutCoordinates>() }
+    var handleCoordinates by remember { mutableStateOf<LayoutCoordinates?>(null) }
     val currentBook by rememberUpdatedState(book)
     val currentPending by rememberUpdatedState(pendingEntry)
     val currentInsertPending by rememberUpdatedState(onInsertPending)
@@ -118,7 +117,7 @@ internal fun LorebookEntryList(
     }
 
     fun updatePointer(position: Offset) {
-        val coordinates = handleCoordinates.value?.takeIf { it.isAttached }
+        val coordinates = handleCoordinates?.takeIf { it.isAttached }
         pointer = coordinates?.localToRoot(position)?.let { LorebookDragPoint(it.x, it.y) }
     }
 
@@ -142,12 +141,14 @@ internal fun LorebookEntryList(
                 feedback = feedback,
                 modifier = Modifier.onGloballyPositioned { safetyBounds = it.dragBoundsInRoot() },
                 handleModifier = Modifier
-                    .onGloballyPositioned { handleCoordinates.value = it }
+                    .onGloballyPositioned { handleCoordinates = it }
                     .pointerInput(pendingEntry.id) {
                         detectDragGestures(
-                            onDragStart = { position -> updatePointer(position) },
+                            orientationLock = null,
+                            onDragStart = { _, change, _ -> updatePointer(change.position) },
                             onDragCancel = { pointer = null },
-                            onDragEnd = {
+                            onDragEnd = { change ->
+                                updatePointer(change.position)
                                 val target = feedback.placement
                                 pointer = null
                                 if (target != null) currentInsertPending(target)
