@@ -22,6 +22,16 @@ internal fun moveLorebookEntry(
 
 internal data class LorebookEntryPlacement(val targetId: Uuid, val after: Boolean)
 
+/** Explicit whole-book shortcut; group and all injection settings remain untouched. */
+internal fun insertLorebookEntryAtEdge(
+    entries: List<PromptInjection.RegexInjection>,
+    pending: PromptInjection.RegexInjection,
+    atEnd: Boolean,
+): List<PromptInjection.RegexInjection> {
+    if (entries.any { it.id == pending.id }) return entries
+    return entries.toMutableList().apply { add(if (atEnd) size else 0, pending) }
+}
+
 /** Resolve by ID against the latest draft, never by a potentially stale lazy-list index. */
 internal fun insertLorebookEntry(
     entries: List<PromptInjection.RegexInjection>,
