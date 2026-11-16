@@ -79,7 +79,7 @@ jobs:
           profile: pixel_2
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
-          script: ./gradlew :app:connectedDebugAndroidTest -Pandroid.injected.androidTest.leaveApksInstalledAfterRun=true -Pandroid.testInstrumentationRunnerArguments.package=me.rerere.rikkahub.ui.pages.extensions -x :web:buildWebUi --stacktrace; result=$?; adb pull /sdcard/Android/data/me.rerere.rikkahub.huadeng.debug/files/round5-layout round5-layout; captured=$?; if [ "$result" -ne 0 ]; then exit "$result"; fi; exit "$captured"
+          script: ./gradlew :app:connectedDebugAndroidTest -Pandroid.injected.androidTest.leaveApksInstalledAfterRun=true -Pandroid.testInstrumentationRunnerArguments.package=me.rerere.rikkahub.ui.pages.extensions -x :web:buildWebUi --stacktrace; result=$?; adb pull /sdcard/Android/data/me.rerere.rikkahub.huadeng.debug/files/round5-layout round5-layout; captured=$?; adb pull /sdcard/Android/data/me.rerere.rikkahub.huadeng.debug/files/round6-layout round6-layout; thumbnails=$?; if [ "$thumbnails" -ne 0 ]; then captured="$thumbnails"; fi; if [ "$result" -ne 0 ]; then exit "$result"; fi; exit "$captured"
       - name: Verify all editor UI test classes executed
         run: |
           python - <<'PY'
@@ -87,7 +87,7 @@ jobs:
           import xml.etree.ElementTree as ET
           cases = [case for file in Path('app/build/outputs/androidTest-results').rglob('TEST-*.xml')
                    for case in ET.parse(file).getroot().iter('testcase')]
-          expected = {'LorebookEntryLayoutTest': 6, 'LorebookEntryBatchUiTest': 3, 'LorebookEntryCopyUiTest': 2, 'LorebookEntryRailGestureTest': 3}
+          expected = {'LorebookEntryLayoutTest': 6, 'LorebookEntryBatchUiTest': 3, 'LorebookEntryCopyUiTest': 2, 'LorebookEntryRailGestureTest': 3, 'LorebookEntryThumbnailUiTest': 6}
           for name, count in expected.items():
               executed = [case for case in cases if case.attrib.get('classname', '').endswith('.' + name)]
               assert len(executed) == count, (name, len(executed), count)
@@ -105,6 +105,7 @@ jobs:
             editor-test.log
             editor-test-results/
             round5-layout/
+            round6-layout/
             app/build/outputs/androidTest-results/
             app/build/reports/androidTests/
       - uses: actions/upload-artifact@v4
