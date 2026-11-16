@@ -5,6 +5,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -46,7 +47,8 @@ class LorebookEntryGroupsUiTest {
             assertTrue("The new card must follow the first drag move out of safety", lifted.bottom > safety.bottom)
         }
         compose.mainClock.advanceTimeByFrame()
-        captureLorebookEditorEvidence(if (held) "groups-batch-drag" else "groups-new-drag")
+        captureLorebookEditorEvidence(if (held) "groups-batch-drag" else "groups-new-drag",
+            compose.onNodeWithTag("groups-editor-root").captureToImage().asAndroidBitmap())
         handle.performTouchInput { up() }
         compose.mainClock.autoAdvance = true
         compose.waitForIdle()
@@ -93,7 +95,7 @@ class LorebookEntryGroupsUiTest {
             MaterialTheme {
                 LorebookEntryList(draft, pending, { pending = null }, { placement ->
                     draft = draft.withLorebookEntries(insertLorebookEntry(draft.entries, fresh, placement)); pending = null
-                }, {}, modifier = Modifier.size(360.dp, 600.dp),
+                }, {}, modifier = Modifier.size(360.dp, 600.dp).testTag("groups-editor-root"),
                     header = {}, onEntriesChange = {}, onEditEntry = {}, onAddEntry = {}, onGroupSettings = { _, _ -> })
             }
         }
@@ -150,7 +152,7 @@ class LorebookEntryGroupsUiTest {
         compose.setContent {
             MaterialTheme {
                 LorebookEntryList(draft, null, { batch = null }, {}, {}, batch = batch,
-                    modifier = Modifier.size(360.dp, 600.dp),
+                    modifier = Modifier.size(360.dp, 600.dp).testTag("groups-editor-root"),
                     onCommitSingle = { id, placement -> commit(setOf(id), placement, null) },
                     onCommitBatch = { placement, end -> commit(checkNotNull(batch).entries.map { it.id }.toSet(), placement, end) },
                     header = {}, onEntriesChange = {}, onEditEntry = {}, onAddEntry = {}, onGroupSettings = { _, _ -> })
