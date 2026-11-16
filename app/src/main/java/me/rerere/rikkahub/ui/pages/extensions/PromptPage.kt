@@ -1403,12 +1403,10 @@ private fun LorebookEditSheet(
                 modifier = Modifier.align(Alignment.CenterHorizontally)
             )
 
-            Column(
-                modifier = Modifier
-                    .weight(1f)
-                    .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
+            LorebookEntryList(
+                book = book,
+                modifier = Modifier.weight(1f),
+                header = {
                 OutlinedTextField(
                     value = book.name,
                     onValueChange = { onEdit(book.copy(name = it)) },
@@ -1433,89 +1431,12 @@ private fun LorebookEditSheet(
                     }
                 )
 
-                // 条目列表（按分组）
-                val groupedEntries = book.entries.groupBy { it.group }
-                val namedGroups = groupedEntries.filterKeys { it.isNotBlank() }
-                val ungroupedEntries = groupedEntries[""] ?: emptyList()
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        stringResource(R.string.prompt_page_entries_format, book.entries.size),
-                        style = MaterialTheme.typography.titleSmall
-                    )
-                    FilledTonalIconButton(onClick = {
-                        entryEditState.open(PromptInjection.RegexInjection())
-                    }) {
-                        Icon(HugeIcons.Add01, stringResource(R.string.prompt_page_add_entry))
-                    }
-                }
-
-                // 有分组的组
-                namedGroups.toList().forEachIndexed { idx, (groupName, groupEntries) ->
-                    LorebookGroupSection(
-                        groupName = groupName,
-                        groupIndex = idx,
-                        entries = groupEntries,
-                        onGroupSettings = {
-                            groupEditState.open(Pair(groupName, groupEntries))
-                        },
-                        onEditEntry = { entryEditState.open(it) },
-                        onDeleteEntry = {
-                            onEdit(book.copy(entries = book.entries - it))
-                        },
-                        onUpdateEntry = { edited ->
-                            val idx = book.entries.indexOfFirst { it.id == edited.id }
-                            if (idx >= 0) {
-                                onEdit(book.copy(entries = book.entries.toMutableList().apply { set(idx, edited) }))
-                            }
-                        },
-                        onAddEntry = {
-                            entryEditState.open(PromptInjection.RegexInjection(group = groupName))
-                        },
-                    )
-                }
-
-                // 无分组的条目
-                if (ungroupedEntries.isNotEmpty()) {
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text(
-                            text = stringResource(R.string.prompt_page_no_group),
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
-                        )
-                        ungroupedEntries.forEach { entry ->
-                            RegexInjectionEntryCard(
-                                entry = entry,
-                                onEdit = { entryEditState.open(entry) },
-                                onDelete = {
-                                    onEdit(book.copy(entries = book.entries - entry))
-                                },
-                                onUpdate = { edited ->
-                                    val idx = book.entries.indexOfFirst { it.id == edited.id }
-                                    if (idx >= 0) {
-                                        onEdit(book.copy(entries = book.entries.toMutableList().apply { set(idx, edited) }))
-                                    }
-                                },
-                            )
-                        }
-                    }
-                }
-
-                // 没有条目时提示
-                if (book.entries.isEmpty()) {
-                    Text(
-                        text = stringResource(R.string.prompt_page_no_entries),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(top = 16.dp),
-                    )
-                }
-            }
+                },
+                onEntriesChange = { onEdit(book.copy(entries = it)) },
+                onEditEntry = { entryEditState.open(it) },
+                onAddEntry = { group -> entryEditState.open(PromptInjection.RegexInjection(group = group)) },
+                onGroupSettings = { group, entries -> groupEditState.open(group to entries) },
+            )
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -1596,16 +1517,16 @@ private fun LorebookEditSheet(
 }
 
 @Composable
-private fun RegexInjectionEntryCard(
+internal fun RegexInjectionEntryCard(
     entry: PromptInjection.RegexInjection,
-    shape: Shape = RoundedCornerShape(20.dp),
+    collapsed: Boolean = false,
+    dragHandle: @Composable () -> Unit = {},
     onEdit: () -> Unit,
     onDelete: () -> Unit,
     onUpdate: (PromptInjection.RegexInjection) -> Unit = {},
 ) {
     var editingName by remember { mutableStateOf(false) }
     var editNameValue by remember { mutableStateOf(entry.name) }
-    var newKeyword by remember { mutableStateOf("") }
 
     Card(
         modifier = if (!entry.enabled) Modifier.fillMaxWidth().alpha(0.5f) else Modifier.fillMaxWidth(),
@@ -1654,7 +1575,7 @@ private fun RegexInjectionEntryCard(
                 } else {
                     Text(
                         text = entry.name.ifEmpty { stringResource(R.string.prompt_page_unnamed_entry) },
-                        style = MaterialTheme.typography.bodyMedium,
+                        style = MaterialTheme.typography.titleSmall,
                         modifier = Modifier
                             .weight(1f)
                             .clickable { editingName = true; editNameValue = entry.name },
@@ -1674,8 +1595,25 @@ private fun RegexInjectionEntryCard(
                 IconButton(onClick = onDelete, modifier = Modifier.size(32.dp)) {
                     Icon(HugeIcons.Delete01, stringResource(R.string.prompt_page_delete), modifier = Modifier.size(18.dp))
                 }
+                dragHandle()
             }
 
+            if (collapsed) {
+                Text(
+                    text = "P${entry.probability}% · " +
+                        (entry.keywords + entry.secondaryKeys).joinToString(", "),
+                    style = MaterialTheme.typography.labelSmall,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    text = entry.content.replace('\n', ' '),
+                    style = MaterialTheme.typography.bodySmall,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.clickable(onClick = onEdit),
+                )
+            } else {
             // 触发词（紧凑显示）
             if (entry.keywords.isNotEmpty() || entry.secondaryKeys.isNotEmpty()) {
                 Text(
@@ -1797,6 +1735,7 @@ private fun RegexInjectionEntryCard(
                     }
                 }
             }
+            }
         }
     }
 }
@@ -1804,17 +1743,15 @@ private fun RegexInjectionEntryCard(
 }
 
 @Composable
-private fun LorebookGroupSection(
+internal fun LorebookGroupSection(
     groupName: String,
     entries: List<PromptInjection.RegexInjection>,
     onGroupSettings: () -> Unit,
-    onEditEntry: (PromptInjection.RegexInjection) -> Unit,
-    onDeleteEntry: (PromptInjection.RegexInjection) -> Unit,
-    onUpdateEntry: (PromptInjection.RegexInjection) -> Unit,
     onAddEntry: () -> Unit,
     groupIndex: Int = 0,
+    expanded: Boolean,
+    onExpandedChange: () -> Unit,
 ) {
-    var expanded by rememberSaveable(groupName) { mutableStateOf(false) }
     val rotationAngle by animateFloatAsState(
         targetValue = if (expanded) 90f else 0f,
         animationSpec = tween(200),
@@ -1840,7 +1777,7 @@ private fun LorebookGroupSection(
             ),
             modifier = Modifier
                 .fillMaxWidth()
-                .clickable { expanded = !expanded },
+                .clickable { onExpandedChange() },
         ) {
             Row(
                 modifier = Modifier
@@ -1890,22 +1827,6 @@ private fun LorebookGroupSection(
             }
         }
 
-        // 组内条目：LazyColumn item 内不做高度动画（会跳），展开收起直接切换
-        if (expanded) {
-            Column(
-                modifier = Modifier.padding(start = 8.dp),
-                verticalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
-                entries.forEach { entry ->
-                    RegexInjectionEntryCard(
-                        entry = entry,
-                        onEdit = { onEditEntry(entry) },
-                        onDelete = { onDeleteEntry(entry) },
-                        onUpdate = { edited -> onUpdateEntry(edited) },
-                    )
-                }
-            }
-        }
     }
 }
 
