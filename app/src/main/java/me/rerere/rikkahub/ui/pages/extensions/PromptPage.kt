@@ -89,7 +89,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.nestedscroll.nestedScroll
@@ -139,6 +138,7 @@ import me.rerere.rikkahub.ui.hooks.useEditState
 import me.rerere.rikkahub.ui.hooks.writeBooleanPreference
 import me.rerere.rikkahub.ui.theme.CustomColors
 import me.rerere.rikkahub.utils.plus
+import me.rerere.rikkahub.utils.JsonInstant
 import me.rerere.ui.components.FormItem
 import me.rerere.ui.components.RikkaConfirmDialog
 import me.rerere.ui.components.Select
@@ -1333,12 +1333,18 @@ private fun LorebookEditSheet(
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val scope = rememberCoroutineScope()
+    var pendingEntryJson by rememberSaveable(book.id.toString()) { mutableStateOf<String?>(null) }
+    val pendingEntry = remember(pendingEntryJson) {
+        pendingEntryJson?.let {
+            JsonInstant.decodeFromString<PromptInjection.RegexInjection>(it)
+        }
+    }
     val entryEditState = useEditState<PromptInjection.RegexInjection> { edited ->
         val index = book.entries.indexOfFirst { it.id == edited.id }
         if (index >= 0) {
             onEdit(book.copy(entries = book.entries.toMutableList().apply { set(index, edited) }))
         } else {
-            onEdit(book.copy(entries = book.entries + edited))
+            pendingEntryJson = JsonInstant.encodeToString(edited)
         }
     }
     val groupEditState = useEditState<Pair<String, List<PromptInjection.RegexInjection>>> { pair ->
@@ -1405,31 +1411,43 @@ private fun LorebookEditSheet(
 
             LorebookEntryList(
                 book = book,
+                pendingEntry = pendingEntry,
+                onUpdatePending = { pendingEntryJson = JsonInstant.encodeToString(it) },
+                onCancelPending = { pendingEntryJson = null },
+                onInsertPending = { placement ->
+                    pendingEntry?.let { pending ->
+                        val entries = insertLorebookEntry(book.entries, pending, placement)
+                        if (entries.any { it.id == pending.id }) {
+                            onEdit(book.copy(entries = entries))
+                            pendingEntryJson = null
+                        }
+                    }
+                },
                 modifier = Modifier.weight(1f),
                 header = {
-                OutlinedTextField(
-                    value = book.name,
-                    onValueChange = { onEdit(book.copy(name = it)) },
-                    label = { Text(stringResource(R.string.prompt_page_name)) },
-                    modifier = Modifier.fillMaxWidth()
-                )
+                    OutlinedTextField(
+                        value = book.name,
+                        onValueChange = { onEdit(book.copy(name = it)) },
+                        label = { Text(stringResource(R.string.prompt_page_name)) },
+                        modifier = Modifier.fillMaxWidth()
+                    )
 
-                OutlinedTextField(
-                    value = book.description,
-                    onValueChange = { onEdit(book.copy(description = it)) },
-                    label = { Text(stringResource(R.string.prompt_page_description)) },
-                    modifier = Modifier.fillMaxWidth()
-                )
+                    OutlinedTextField(
+                        value = book.description,
+                        onValueChange = { onEdit(book.copy(description = it)) },
+                        label = { Text(stringResource(R.string.prompt_page_description)) },
+                        modifier = Modifier.fillMaxWidth()
+                    )
 
-                FormItem(
-                    label = { Text(stringResource(R.string.prompt_page_enabled)) },
-                    tail = {
-                        Switch(
-                            checked = book.enabled,
-                            onCheckedChange = { onEdit(book.copy(enabled = it)) }
-                        )
-                    }
-                )
+                    FormItem(
+                        label = { Text(stringResource(R.string.prompt_page_enabled)) },
+                        tail = {
+                            Switch(
+                                checked = book.enabled,
+                                onCheckedChange = { onEdit(book.copy(enabled = it)) }
+                            )
+                        }
+                    )
 
                 },
                 onEntriesChange = { onEdit(book.copy(entries = it)) },
@@ -1445,7 +1463,7 @@ private fun LorebookEditSheet(
                 TextButton(onClick = onDismiss) {
                     Text(stringResource(R.string.prompt_page_cancel))
                 }
-                Button(onClick = onConfirm) {
+                Button(onClick = onConfirm, enabled = pendingEntry == null) {
                     Text(stringResource(R.string.prompt_page_confirm))
                 }
             }
@@ -1748,6 +1766,8 @@ internal fun LorebookGroupSection(
     entries: List<PromptInjection.RegexInjection>,
     onGroupSettings: () -> Unit,
     onAddEntry: () -> Unit,
+    canAddEntry: Boolean = true,
+    canEditGroup: Boolean = true,
     groupIndex: Int = 0,
     expanded: Boolean,
     onExpandedChange: () -> Unit,
@@ -1818,10 +1838,10 @@ internal fun LorebookGroupSection(
                         color = MaterialTheme.colorScheme.onSecondaryContainer,
                     )
                 }
-                IconButton(onClick = onGroupSettings, modifier = Modifier.size(28.dp)) {
+                IconButton(onClick = onGroupSettings, enabled = canEditGroup, modifier = Modifier.size(28.dp)) {
                     Icon(HugeIcons.Tools, null, modifier = Modifier.size(16.dp))
                 }
-                IconButton(onClick = onAddEntry, modifier = Modifier.size(28.dp)) {
+                IconButton(onClick = onAddEntry, enabled = canAddEntry, modifier = Modifier.size(28.dp)) {
                     Icon(HugeIcons.Add01, null, modifier = Modifier.size(16.dp))
                 }
             }
