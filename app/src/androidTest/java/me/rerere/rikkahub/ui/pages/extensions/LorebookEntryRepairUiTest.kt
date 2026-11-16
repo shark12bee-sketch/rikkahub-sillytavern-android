@@ -6,6 +6,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.SemanticsProperties
@@ -104,7 +105,8 @@ class LorebookEntryRepairUiTest {
         compose.onNodeWithText("取消删除").performClick()
         compose.runOnIdle { assertEquals(original, stored) }
         compose.onNodeWithText("删除所选").performClick()
-        captureLorebookRepairEvidence("delete-confirmation")
+        captureLorebookRepairEvidence("delete-confirmation",
+            compose.onNode(isDialog() and hasAnyDescendant(hasText("确认删除所选"))).captureToImage().asAndroidBitmap())
         compose.onNodeWithText("确认删除").performClick()
         compose.runOnIdle {
             assertEquals(original.entries.drop(1), stored.entries)
