@@ -88,6 +88,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -701,14 +703,16 @@ private fun LorebookTab(
             onUpdate(newList)
         }
     }
-    val editState = useEditState<Lorebook> { edited ->
-        val index = lorebooks.indexOfFirst { it.id == edited.id }
+    fun saveLorebook(edited: Lorebook) {
+        val latest = currentLorebooks
+        val index = latest.indexOfFirst { it.id == edited.id }
         if (index >= 0) {
-            onUpdate(lorebooks.toMutableList().apply { set(index, edited) })
+            onUpdate(latest.toMutableList().apply { set(index, edited) })
         } else {
-            onUpdate(lorebooks + edited)
+            onUpdate(latest + edited)
         }
     }
+    val editState = useEditState<Lorebook>(::saveLorebook)
     val importSuccessMsg = stringResource(R.string.export_import_success)
     val importFailedMsg = stringResource(R.string.export_import_failed)
     val presetFolderName = stringResource(R.string.tavern_regex_preset_folder)
@@ -1201,6 +1205,7 @@ private fun LorebookTab(
                 book = state,
                 onDismiss = { editState.dismiss() },
                 onConfirm = { editState.confirm() },
+                onSave = ::saveLorebook,
                 onEdit = { editState.currentState = it }
             )
         }
@@ -1329,6 +1334,7 @@ private fun LorebookEditSheet(
     book: Lorebook,
     onDismiss: () -> Unit,
     onConfirm: () -> Unit,
+    onSave: (Lorebook) -> Unit,
     onEdit: (Lorebook) -> Unit
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -1416,7 +1422,9 @@ private fun LorebookEditSheet(
                 onCancelPending = { pendingEntryJson = null },
                 onInsertPendingAtEdge = { atEnd ->
                     pendingEntry?.let { pending ->
-                        onEdit(book.copy(entries = insertLorebookEntryAtEdge(book.entries, pending, atEnd)))
+                        val inserted = book.copy(entries = insertLorebookEntryAtEdge(book.entries, pending, atEnd))
+                        onEdit(inserted)
+                        onSave(inserted)
                         pendingEntryJson = null
                     }
                 },
@@ -1559,17 +1567,15 @@ internal fun RegexInjectionEntryCard(
             containerColor = CustomColors.listItemColors.containerColor
         ),
     ) {
-        Row(modifier = Modifier.fillMaxWidth()) {
-            // 左侧 4dp 彩色装饰线
-            Box(
-                modifier = Modifier
-                    .width(4.dp)
-                    .fillMaxHeight()
-                    .background(MaterialTheme.colorScheme.surfaceVariant)
-            )
+        val stripeColor = MaterialTheme.colorScheme.surfaceVariant
+        // Draw inside the measured card. A fillMaxHeight child would expand a bounded safety area.
+        Row(modifier = Modifier.fillMaxWidth().drawBehind {
+            drawRect(stripeColor, size = Size(4.dp.toPx(), size.height))
+        }) {
             Column(
                 modifier = Modifier
                     .weight(1f)
+                    .padding(start = 4.dp)
                     .padding(12.dp)
             ) {
             // 第一行：名称 + 启用开关 + 操作按钮
