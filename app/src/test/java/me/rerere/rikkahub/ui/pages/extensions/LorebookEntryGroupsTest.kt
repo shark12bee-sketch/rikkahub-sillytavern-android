@@ -95,7 +95,7 @@ class LorebookEntryGroupsTest {
         val viewport = LorebookDragBounds(0f, 100f, 300f, 600f)
         fun feedback(y: Float) = evaluateLorebookEntryDrag(LorebookDragPoint(100f, y), safety, viewport,
             listOf(LorebookDropTarget(null, "Empty", 110f, 150f), LorebookDropTarget(entries[1].id, "B", 160f, 250f)),
-            "A", 50f, 720f, true, true, allowCrossGroup = true)
+            50f, 720f, true, true)
         assertEquals(LorebookEntryPlacement.groupEdge("Empty", false), feedback(130f).placement)
         assertEquals(LorebookEntryPlacement(entries[1].id, true, "B"), feedback(240f).placement)
         assertNull(feedback(50f).placement)

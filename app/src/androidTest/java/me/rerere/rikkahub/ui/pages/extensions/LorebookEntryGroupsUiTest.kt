@@ -24,6 +24,7 @@ class LorebookEntryGroupsUiTest {
     private val original = Lorebook(entries = listOf(alpha, beta, anchor), entryGroups = listOf("A", "B", "Empty"))
     private var draft by mutableStateOf(original)
     private var stored by mutableStateOf(original)
+    private var sheetVisible by mutableStateOf(true)
 
     private fun chooseGroup(group: String) {
         compose.onNodeWithTag("lorebook-target-group").performClick()
@@ -39,6 +40,11 @@ class LorebookEntryGroupsUiTest {
         handle.performTouchInput { moveTo(Offset(bounds.width * 0.3f, destination.center.y - bounds.top + 2f)) }
         compose.mainClock.advanceTimeBy(80)
         compose.onNodeWithText("松手插入").assertIsDisplayed()
+        if (!held) {
+            val safety = compose.onNodeWithTag("lorebook-insertion-safety-area").fetchSemanticsNode().boundsInRoot
+            val lifted = compose.onNodeWithTag("lorebook-lifted-batch").fetchSemanticsNode().boundsInRoot
+            assertTrue("The new card must follow the first drag move out of safety", lifted.bottom > safety.bottom)
+        }
         compose.mainClock.advanceTimeByFrame()
         captureLorebookEditorEvidence(if (held) "groups-batch-drag" else "groups-new-drag")
         handle.performTouchInput { up() }
@@ -49,7 +55,9 @@ class LorebookEntryGroupsUiTest {
     private fun showSheet() {
         compose.setContent {
             MaterialTheme {
-                LorebookEditSheet(draft, {}, { stored = draft }, { stored = it }, stored,
+                if (!sheetVisible) androidx.compose.material3.TextButton(onClick = { draft = stored; sheetVisible = true }) {
+                    androidx.compose.material3.Text("重开世界书")
+                } else LorebookEditSheet(draft, {}, { stored = draft; sheetVisible = false }, { stored = it }, stored,
                     onCommitBatch = { request -> applyLorebookBatch(listOf(stored), request).single().also { stored = it } },
                     onEdit = { draft = it })
             }
@@ -60,9 +68,9 @@ class LorebookEntryGroupsUiTest {
         showSheet()
         compose.onNodeWithTag("lorebook-entry-list").performScrollToNode(hasText("管理分组"))
         compose.onNodeWithText("管理分组").performClick()
-        compose.onNode(hasSetTextAction()).performTextInput("Created")
+        compose.onNodeWithTag("lorebook-group-name").performTextInput("Created")
         compose.onNodeWithText("创建分组").performClick()
-        compose.onNodeWithText("Created · 0 条").assertIsDisplayed()
+        compose.onNodeWithText("Created · 0 条").performScrollTo().assertIsDisplayed()
         compose.onNodeWithText("完成分组管理").performClick()
         compose.onNodeWithTag("lorebook-entry-list").performScrollToNode(hasTestTag("lorebook-group:Created"))
         compose.onNodeWithTag("lorebook-group:Created").assertIsDisplayed()
@@ -73,6 +81,9 @@ class LorebookEntryGroupsUiTest {
             .getString(me.rerere.rikkahub.R.string.prompt_page_confirm)
         compose.onNodeWithText(label).performClick()
         compose.runOnIdle { assertEquals(draft, stored); assertTrue("Created" in stored.entryGroups) }
+        compose.onNodeWithText("重开世界书").performClick()
+        compose.onNodeWithTag("lorebook-entry-list").performScrollToNode(hasTestTag("lorebook-group:Created"))
+        compose.onNodeWithTag("lorebook-group:Created").assertIsDisplayed()
     }
 
     @Test fun newEntryCanDragIntoAnEmptyGroupHeaderWithOriginalId() {
@@ -145,7 +156,7 @@ class LorebookEntryGroupsUiTest {
                     header = {}, onEntriesChange = {}, onEditEntry = {}, onAddEntry = {}, onGroupSettings = { _, _ -> })
             }
         }
-        compose.onNodeWithText("A").performClick()
+        compose.onNode(hasText("A") and hasClickAction()).performClick()
         move(compose.onNodeWithTag("lorebook-thumbnail-${beta.id}"), compose.onNodeWithContentDescription("拖动排序 Anchor"), true)
         compose.runOnIdle { assertEquals(listOf(alpha), batch?.entries); assertEquals(beta.copy(group = "A"), draft.entries.single { it.id == beta.id }) }
         compose.onNodeWithTag("lorebook-entry-list").performScrollToNode(hasTestTag("lorebook-group:Empty"))
@@ -178,6 +189,8 @@ class LorebookEntryGroupsUiTest {
         chooseGroup("Destination")
         compose.onNodeWithText("插入最后").performClick()
         compose.onNodeWithText("确认跨书复制").assertIsDisplayed()
+        compose.onNodeWithText("「Destination」组内最后", substring = true).assertIsDisplayed()
+        compose.onNodeWithText("目标为「Destination」分组", substring = true).assertIsDisplayed()
         compose.runOnIdle { assertEquals(listOf(source, target), books) }
         compose.onNodeWithText("确认复制").performClick()
         compose.runOnIdle {

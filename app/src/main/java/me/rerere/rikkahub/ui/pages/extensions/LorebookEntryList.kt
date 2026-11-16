@@ -98,6 +98,9 @@ internal fun LorebookEntryList(
         mutableStateOf(pendingEntry?.group ?: batch?.group.orEmpty())
     }
     LaunchedEffect(pendingEntry?.group) { if (pendingEntry != null) targetGroup = pendingEntry.group }
+    fun revealDestination(placement: LorebookEntryPlacement) {
+        placement.group?.let { group -> expandedGroups = (expandedGroups + group).distinct() }
+    }
     val edge = with(LocalDensity.current) { 64.dp.toPx() }
     val maxScrollVelocity = with(LocalDensity.current) { 720.dp.toPx() }
     val listState = rememberLazyListState()
@@ -119,12 +122,10 @@ internal fun LorebookEntryList(
                 safety = insertion.safetyBounds,
                 viewport = listBounds,
                 targets = targets,
-                group = currentGroup,
                 edgeSize = edge,
                 maxScrollVelocity = maxScrollVelocity,
                 canScrollBackward = listState.canScrollBackward,
                 canScrollForward = listState.canScrollForward,
-                allowCrossGroup = true,
             )
         }
     }
@@ -170,14 +171,14 @@ internal fun LorebookEntryList(
                     modifier = Modifier.heightIn(max = safetyHeightLimit).testTag("lorebook-insertion-safety-area"),
                     title = if (batch != null) "${batch.mode.label} · 已选 ${batch.entries.size} 条"
                         else "待插入 · ${pendingEntry?.group?.ifBlank { "未分组" }}",
-                    onConfirm = { if (batch != null) onCommitBatch(it, null) else onInsertPending(it) },
-                    onConfirmSingle = onCommitSingle,
+                    onConfirm = { revealDestination(it); if (batch != null) onCommitBatch(it, null) else onInsertPending(it) },
+                    onConfirmSingle = { id, placement -> revealDestination(placement); onCommitSingle(id, placement) },
                     longPressDrag = batch != null,
                     compact = batch != null,
                     enabled = batchEnabled,
                     cancelEnabled = !batchBusy,
-                    idleHint = batchHint ?: if (batch != null) "长按右侧手柄整组拖动，选择同组落点；快捷插入首尾会立即保存"
-                        else "安全区：拖动手柄选择同组位置；快捷插入首尾会立即保存",
+                    idleHint = batchHint ?: if (batch != null) "长按右侧手柄整组拖动，选择条目或分组落点；快捷插入首尾会立即保存"
+                        else "安全区：拖动手柄选择条目或分组落点；快捷插入首尾会立即保存",
                     instructions = (batchHint?.let { "$it\n" }.orEmpty()) + lorebookInsertionInstructions(batch?.mode),
                     headerActions = {
                         LorebookGroupTargetSelector(groupNames + listOfNotNull(pendingEntry?.group, batch?.group),
@@ -186,6 +187,7 @@ internal fun LorebookEntryList(
                     onCancel = onCancelPending,
                     onInsertAtEdge = { end ->
                         val placement = LorebookEntryPlacement.groupEdge(targetGroup, end)
+                        revealDestination(placement)
                         if (batch != null) onCommitBatch(placement, null) else onInsertPending(placement)
                     },
                 ) { handleModifier, thumbnailHandle ->
@@ -313,7 +315,8 @@ internal fun LorebookEntryList(
         else if (pendingEntry != null) LorebookInsertionOverlay(insertion, rootOrigin) {
             val width = with(LocalDensity.current) { checkNotNull(insertion.drag).origin.width.toDp() }
             Box(Modifier.width(width).shadow(4.dp, MaterialTheme.shapes.large).clearAndSetSemantics {}) {
-                RegexInjectionEntryCard(pendingEntry, onEdit = {}, onDelete = {})
+                RegexInjectionEntryCard(pendingEntry,
+                    dragHandle = { LorebookDragHandle("移动中的新增条目") }, onEdit = {}, onDelete = {})
             }
         }
     }
