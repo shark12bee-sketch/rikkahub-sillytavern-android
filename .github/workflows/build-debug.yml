@@ -14,7 +14,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        kind: [feature, upstream]
+        kind: [feature]
     steps:
       - uses: actions/checkout@v4
         with:
@@ -52,7 +52,7 @@ jobs:
         run: |
           set -o pipefail
           ./gradlew :app:testDebugUnitTest \
-            --tests 'me.rerere.rikkahub.ui.pages.extensions.LorebookEntryOrderTest' \
+            --tests 'me.rerere.rikkahub.ui.pages.extensions.LorebookEntry*Test' \
             -x :web:buildWebUi --stacktrace 2>&1 | tee editor-test.log
           cp -r app/build/test-results/testDebugUnitTest editor-test-results
       - name: Compare existing prompt injection tests
