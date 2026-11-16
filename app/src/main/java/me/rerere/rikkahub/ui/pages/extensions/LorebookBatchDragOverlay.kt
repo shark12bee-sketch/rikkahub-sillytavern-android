@@ -4,6 +4,7 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.VectorConverter
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -35,6 +36,24 @@ import kotlin.math.roundToInt
 internal fun LorebookBatchDragOverlay(state: LorebookInsertionState, batch: LorebookBatchPreview, rootOrigin: Offset) {
     val drag = state.drag ?: return
     val entries = remember(drag.token) { batch.entries.filter { drag.entryId == null || it.id == drag.entryId } }
+    LorebookInsertionOverlay(state, rootOrigin) {
+        val width = with(LocalDensity.current) { drag.origin.width.toDp() }
+        LazyRow(Modifier.width(width).offset(y = (-4).dp), horizontalArrangement = Arrangement.spacedBy(6.dp),
+            state = rememberLazyListState(if (drag.entryId == null) drag.window.firstIndex else 0,
+                if (drag.entryId == null) drag.window.offset else 0),
+            contentPadding = PaddingValues(vertical = 4.dp), userScrollEnabled = false) {
+            items(entries, key = { it.id }) { entry ->
+                LorebookThumbnailFace(entry, Modifier.shadow(4.dp, MaterialTheme.shapes.medium))
+            }
+        }
+        if (drag.entryId == null) Text("${entries.size} 条", Modifier.align(Alignment.BottomEnd),
+            style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+    }
+}
+
+@Composable
+internal fun LorebookInsertionOverlay(state: LorebookInsertionState, rootOrigin: Offset, content: @Composable BoxScope.() -> Unit) {
+    val drag = state.drag ?: return
     val settle = remember(drag.token) { Animatable(Offset.Zero, Offset.VectorConverter) }
     val opacity = remember(drag.token) { Animatable(1f) }
     var settling by remember(drag.token) { mutableStateOf(false) }
@@ -49,19 +68,9 @@ internal fun LorebookBatchDragOverlay(state: LorebookInsertionState, batch: Lore
     }
     val delta = if (drag.released && settling) settle.value else drag.last - drag.start
     val position = drag.origin.topLeft - rootOrigin + delta
-    val width = with(LocalDensity.current) { drag.origin.width.toDp() }
     Box(Modifier.zIndex(1f).offset { IntOffset(position.x.roundToInt(), position.y.roundToInt()) }
         .promptReorderLift(!drag.released).graphicsLayer { alpha = opacity.value }
         .testTag("lorebook-lifted-batch")) {
-        LazyRow(Modifier.width(width).offset(y = (-4).dp), horizontalArrangement = Arrangement.spacedBy(6.dp),
-            state = rememberLazyListState(if (drag.entryId == null) drag.window.firstIndex else 0,
-                if (drag.entryId == null) drag.window.offset else 0),
-            contentPadding = PaddingValues(vertical = 4.dp), userScrollEnabled = false) {
-            items(entries, key = { it.id }) { entry ->
-                LorebookThumbnailFace(entry, Modifier.shadow(4.dp, MaterialTheme.shapes.medium))
-            }
-        }
-        if (drag.entryId == null) Text("${entries.size} 条", Modifier.align(Alignment.BottomEnd),
-            style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+        content()
     }
 }

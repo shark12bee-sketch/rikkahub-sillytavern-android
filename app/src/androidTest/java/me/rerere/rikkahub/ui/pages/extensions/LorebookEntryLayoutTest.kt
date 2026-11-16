@@ -59,10 +59,6 @@ class LorebookEntryLayoutTest {
                         draft = draft.copy(entries = insertLorebookEntry(draft.entries, pending, target))
                         staged = null
                     },
-                    onInsertPendingAtEdge = { end ->
-                        draft = draft.copy(entries = insertLorebookEntryAtEdge(draft.entries, pending, end))
-                        staged = null
-                    },
                     onUpdatePending = { staged = it },
                     modifier = Modifier.size(width = 360.dp, height = 560.dp).testTag("editor"),
                     header = { Text("Book settings", Modifier.height(200.dp)) },
@@ -195,25 +191,25 @@ class LorebookEntryLayoutTest {
         // Cross touch slop horizontally, entirely inside the safety boundary.
         handle.performTouchInput { down(center); moveBy(Offset(-50f, 0f)) }
         compose.mainClock.advanceTimeBy(200)
-        compose.onNodeWithText("安全区内 · 插入已暂停；向下拖出安全区继续").assertIsDisplayed()
+        compose.onNodeWithText("已暂停").assertIsDisplayed()
         assertEquals(initialScroll, scrollPosition(), 0f)
 
         val inList = Offset(handleBounds.width / 2f, list.top + list.height * 0.5f - handleBounds.top)
         handle.performTouchInput { moveTo(inList) }
         compose.mainClock.advanceTimeBy(64)
-        compose.onNodeWithText("正在选择插入位置 · 松手插入指示线处").assertIsDisplayed()
+        compose.onNodeWithText("松手插入").assertIsDisplayed()
 
         val inSafety = Offset(handleBounds.width / 2f, safety.center.y - handleBounds.top)
         handle.performTouchInput { moveTo(inSafety) }
         compose.mainClock.advanceTimeBy(200)
-        compose.onNodeWithText("安全区内 · 插入已暂停；向下拖出安全区继续").assertIsDisplayed()
+        compose.onNodeWithText("已暂停").assertIsDisplayed()
         val pausedScroll = scrollPosition()
         compose.mainClock.advanceTimeBy(300)
         assertEquals(pausedScroll, scrollPosition(), 0f)
 
         handle.performTouchInput { moveTo(inList) }
         compose.mainClock.advanceTimeBy(64)
-        compose.onNodeWithText("正在选择插入位置 · 松手插入指示线处").assertIsDisplayed()
+        compose.onNodeWithText("松手插入").assertIsDisplayed()
         // No frame/recomposition between returning and UP: final coordinates must still win.
         handle.performTouchInput { moveTo(inSafety); up() }
         compose.mainClock.autoAdvance = true

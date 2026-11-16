@@ -63,6 +63,7 @@ internal fun LorebookInsertionSafetyArea(
     onConfirmSingle: (Uuid, LorebookEntryPlacement) -> Unit = { _, _ -> },
     idleHint: String = "安全区：拖动手柄选择同组位置；快捷插入首尾会立即保存",
     instructions: String = idleHint,
+    headerActions: @Composable () -> Unit = {},
     content: @Composable (handleModifier: Modifier, thumbnailHandle: @Composable (Uuid, () -> Unit) -> Modifier) -> Unit,
 ) {
     val handleModifier = lorebookInsertionHandle(state, enabled, longPressDrag, feedback,
@@ -85,6 +86,7 @@ internal fun LorebookInsertionSafetyArea(
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Text(title, Modifier.weight(1f), style = MaterialTheme.typography.titleSmall,
                     maxLines = 1, overflow = TextOverflow.Ellipsis)
+                headerActions()
                 val status = when (dragFeedback.phase) {
                     LorebookDragPhase.IDLE -> null
                     LorebookDragPhase.SAFE, LorebookDragPhase.OUTSIDE -> "已暂停"
@@ -108,8 +110,8 @@ internal fun LorebookInsertionSafetyArea(
             val previewModifier = if (compact) Modifier else Modifier.weight(1f, fill = false)
                 .verticalScroll(rememberScrollState())
             Box(
-                previewModifier.graphicsLayer {
-                        alpha = if (!compact && dragFeedback.phase == LorebookDragPhase.INSERTION) 0.45f else 1f
+                previewModifier.onGloballyPositioned { if (!compact) state.previewBounds = it.boundsInRoot() }.graphicsLayer {
+                        alpha = if (!compact && state.drag != null) 0.25f else 1f
                     },
             ) {
                 content(handleModifier) { id, onTap ->

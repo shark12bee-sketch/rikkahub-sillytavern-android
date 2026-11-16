@@ -120,14 +120,14 @@ class LorebookEntryOrderTest {
     }
 
     @Test
-    fun `whole book shortcuts preserve group and every configuration field`() {
+    fun `group shortcuts preserve group and every configuration field`() {
         val entries = listOf(entry("a", "A"), entry("b", "B"))
         val pending = entry("pending", "B")
-        val front = insertLorebookEntryAtEdge(entries, pending, atEnd = false)
-        val back = insertLorebookEntryAtEdge(entries, pending, atEnd = true)
-        assertEquals(listOf(pending) + entries, front)
+        val front = insertLorebookEntry(entries, pending, LorebookEntryPlacement.groupEdge(pending.group, false))
+        val back = insertLorebookEntry(entries, pending, LorebookEntryPlacement.groupEdge(pending.group, true))
+        assertEquals(listOf(entries[0], pending, entries[1]), front)
         assertEquals(entries + pending, back)
-        assertSame(pending, front.first())
+        assertSame(pending, front[1])
         assertSame(pending, back.last())
         assertEquals(2, entries.size)
     }
@@ -136,12 +136,12 @@ class LorebookEntryOrderTest {
     fun `shortcuts handle empty single entry and duplicate ids`() {
         val pending = entry("pending", "new group")
         listOf(false, true).forEach { atEnd ->
-            assertEquals(listOf(pending), insertLorebookEntryAtEdge(emptyList(), pending, atEnd))
+            assertEquals(listOf(pending), insertLorebookEntry(emptyList(), pending, LorebookEntryPlacement.groupEdge(pending.group, atEnd)))
             val existing = entry("existing", "other group")
             val entries = listOf(existing)
-            val inserted = insertLorebookEntryAtEdge(entries, pending, atEnd)
-            assertEquals(if (atEnd) listOf(existing, pending) else listOf(pending, existing), inserted)
-            assertSame(inserted, insertLorebookEntryAtEdge(inserted, pending, atEnd))
+            val inserted = insertLorebookEntry(entries, pending, LorebookEntryPlacement.groupEdge(pending.group, atEnd))
+            assertEquals(listOf(existing, pending), inserted)
+            assertSame(inserted, insertLorebookEntry(inserted, pending, LorebookEntryPlacement.groupEdge(pending.group, atEnd)))
         }
     }
 }

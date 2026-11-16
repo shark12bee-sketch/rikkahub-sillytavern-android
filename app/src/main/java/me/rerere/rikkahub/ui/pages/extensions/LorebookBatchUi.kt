@@ -49,7 +49,7 @@ internal data class LorebookBatchPreview(
     val mode: LorebookBatchMode,
     val entries: List<PromptInjection.RegexInjection>,
 ) {
-    val group: String get() = entries.firstOrNull()?.group.orEmpty()
+    val group: String get() = entries.map { it.group }.distinct().singleOrNull().orEmpty()
 }
 
 /** ICU character boundaries preserve emoji sequences and combining marks, not just UTF-16 units. */
@@ -130,26 +130,30 @@ internal fun LorebookSelectionControls(
     onSelect: (Set<Uuid>) -> Unit,
     onDone: () -> Unit,
     onCancel: () -> Unit,
+    groups: List<String> = emptyList(),
+    onMoveToGroup: ((String) -> Unit)? = null,
 ) {
     val actual = orderedLorebookSelection(entries, selected)
-    val group = actual.firstOrNull()?.group ?: entries.firstOrNull()?.group
-    val inGroup = entries.filter { it.group == group }.map { it.id }.toSet()
+    val inGroup = entries.map { it.id }.toSet()
+    var destination by remember { mutableStateOf("") }
     Column {
         Text("${mode.label} · 已选 ${actual.size} 条", style = MaterialTheme.typography.labelLarge)
-        Text("一次仅选择同一分组；全选范围：${group?.ifBlank { "未分组" } ?: "暂无条目"}",
-            style = MaterialTheme.typography.bodySmall)
         if (mode == LorebookBatchMode.COPY) Text(
             "完成后返回世界书列表。来源书不会修改，来源草稿的未保存修改不会写入。",
             style = MaterialTheme.typography.bodySmall,
         )
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             TextButton(onClick = { onSelect(if (selected == inGroup) emptySet() else inGroup) }, enabled = inGroup.isNotEmpty()) {
-                Text(if (selected == inGroup && selected.isNotEmpty()) "取消全选" else "全选该组")
+                Text(if (selected == inGroup && selected.isNotEmpty()) "取消全选" else "全选条目")
             }
             TextButton(onClick = onCancel) { Text("取消批量操作") }
-            TextButton(onClick = onDone, enabled = actual.isNotEmpty() && actual.map { it.group }.distinct().size == 1) {
+            TextButton(onClick = onDone, enabled = actual.isNotEmpty()) {
                 Text("完成选择")
             }
+        }
+        if (mode == LorebookBatchMode.MOVE && onMoveToGroup != null) Row {
+            LorebookGroupTargetSelector(groups, destination, true) { destination = it }
+            TextButton(onClick = { onMoveToGroup(destination) }, enabled = actual.isNotEmpty()) { Text("移入分组") }
         }
     }
 }
@@ -184,13 +188,13 @@ internal fun LorebookCopyShelf(task: LorebookCopyTask, busy: Boolean, onRemove: 
 internal fun lorebookCopyConfirmation(request: LorebookBatchRequest): String {
     val action = request.action as LorebookBatchAction.Copy
     val task = action.task.copy(entries = orderedLorebookSelection(action.task.entries, action.ids))
-    val group = task.entries.first().group
+    val group = request.placement?.group ?: task.entries.first().group
     val existingGroups = request.draft.entries.flatMap { entry ->
         listOf(entry.group) + entry.inclusionGroup.split(",").map { it.trim() }
     }.toSet()
     val grouping = when {
-        group.isBlank() -> "保留未分组状态。"
-        group in existingGroups -> "保留「$group」分组；目标已有同名的普通或包含分组，按现有规则参与触发与竞争。"
+        group.isBlank() -> "目标为未分组；来源分组不写回，其他配置保留。"
+        group in existingGroups -> "目标为「$group」分组；目标已有同名的普通或包含分组，按现有规则参与触发与竞争。"
         else -> "在目标中新建同名分组「$group」，保留原分组设置。"
     }
     val inclusionGroups = task.entries.flatMap { it.inclusionGroup.split(",") }
@@ -201,7 +205,9 @@ internal fun lorebookCopyConfirmation(request: LorebookBatchRequest): String {
     val position = when (request.atEnd) {
         true -> "整本列表最后"
         false -> "整本列表最前"
-        null -> request.draft.entries.firstOrNull { it.id == request.placement?.targetId }?.let {
+        null -> if (request.placement?.targetId == null && request.placement?.group != null) {
+            "「${groupLabel(group)}」组内${if (request.placement.after) "最后" else "最前"}"
+        } else request.draft.entries.firstOrNull { it.id == request.placement?.targetId }?.let {
             "「${it.name.ifBlank { "未命名条目" }}」${if (request.placement?.after == true) "之后" else "之前"}"
         } ?: "所选位置"
     }

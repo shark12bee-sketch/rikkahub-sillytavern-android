@@ -24,7 +24,6 @@ internal class LorebookCopyState {
     fun stage(sourceBookId: Uuid, entries: List<PromptInjection.RegexInjection>) = synchronized(lock) {
         check(!mutableBusy.value && mutablePending.value == null) { "请先完成或取消当前复制任务" }
         require(entries.isNotEmpty() && entries.map { it.id }.distinct().size == entries.size) { "请选择有效条目" }
-        require(entries.map { it.group }.distinct().size == 1) { "一次只能复制同一分组的条目" }
         mutablePending.value = LorebookCopyTask(Uuid.random(), sourceBookId, entries.toList())
     }
 
