@@ -79,7 +79,7 @@ jobs:
           profile: pixel_2
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
-          script: ./gradlew :app:connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.package=me.rerere.rikkahub.ui.pages.extensions -x :web:buildWebUi --stacktrace
+          script: ./gradlew :app:connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.package=me.rerere.rikkahub.ui.pages.extensions -x :web:buildWebUi --stacktrace; result=$?; adb pull /sdcard/Android/data/me.rerere.rikkahub.huadeng.debug/files/round5-layout round5-layout || true; exit "$result"
       - name: Verify all editor UI test classes executed
         run: |
           python - <<'PY'
@@ -104,6 +104,7 @@ jobs:
             test.log
             editor-test.log
             editor-test-results/
+            round5-layout/
             app/build/outputs/androidTest-results/
             app/build/reports/androidTests/
       - uses: actions/upload-artifact@v4
