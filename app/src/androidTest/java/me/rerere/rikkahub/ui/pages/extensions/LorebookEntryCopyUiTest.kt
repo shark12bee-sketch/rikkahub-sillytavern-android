@@ -12,6 +12,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -117,6 +118,11 @@ class LorebookEntryCopyUiTest {
             }
         }
         compose.onNodeWithTag("lorebook-insertion-safety-area").assertDoesNotExist()
+        compose.onNodeWithText(cancelLabel).performClick()
+        compose.onNodeWithText("Open target").performClick()
+        compose.onNodeWithTag("lorebook-entry-list").performScrollToNode(hasText("One"))
+        compose.onNodeWithText("One").assertIsDisplayed()
+        compose.runOnIdle { assertEquals(source, stored[0]); assertEquals(3, stored[1].entries.size) }
     }
 
     @Test fun lastThumbnailRemovalAndCancelClearShelfWithoutWritingAnyBook() {
