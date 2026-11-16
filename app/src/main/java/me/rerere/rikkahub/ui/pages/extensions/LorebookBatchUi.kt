@@ -174,6 +174,7 @@ internal fun LorebookCopyShelf(task: LorebookCopyTask, busy: Boolean, onRemove: 
         feedback = { LorebookDragFeedback(LorebookDragPhase.IDLE) },
         title = "待复制 · 已选 ${task.entries.size} 条",
         idleHint = "请选择另一份世界书，再确认落点；保留来源分组和触发配置",
+        instructions = "请选择另一份世界书，再确认落点。\n" + lorebookInsertionInstructions(LorebookBatchMode.COPY),
         onConfirm = {}, onInsertAtEdge = {}, onCancel = onCancel,
         enabled = false, cancelEnabled = !busy, longPressDrag = true, compact = true,
         modifier = Modifier.fillMaxWidth().testTag("lorebook-copy-shelf"),
@@ -205,4 +206,10 @@ internal fun lorebookCopyConfirmation(request: LorebookBatchRequest): String {
         } ?: "所选位置"
     }
     return "将 ${task.entries.size} 条复制到「${request.draft.name.ifBlank { "未命名世界书" }}」的$position。\n$grouping$inclusion\n来源世界书不变；副本生成新 ID，其余条目配置完整保留。当前目标书草稿也会一并保存。"
+}
+
+internal fun lorebookInsertionInstructions(mode: LorebookBatchMode?): String = when (mode) {
+    null -> "拖动右侧手柄拿起新增条目。拖出安全区选择插入位置；返回安全区暂停。可选择目标分组并使用组内首尾按钮。取消不会写入条目。"
+    else -> "短按方块：预览条目。\n长按方块：单条拖动。\n长按右侧三条杠：整组拖动。\n拖出安全区：选择插入位置。\n返回安全区：暂停插入判断。" +
+        if (mode == LorebookBatchMode.COPY) "\n复制不会删除来源条目；副本生成独立 ID，确认目标后才保存。" else "\n确认落点前不修改原列表；保存成功后只移除已插入的暂存条目。"
 }

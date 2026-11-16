@@ -11,6 +11,11 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.IconButton
+import androidx.compose.foundation.layout.size
+import androidx.compose.runtime.remember
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -57,6 +62,7 @@ internal fun LorebookInsertionSafetyArea(
     cancelEnabled: Boolean = true,
     onConfirmSingle: (Uuid, LorebookEntryPlacement) -> Unit = { _, _ -> },
     idleHint: String = "安全区：拖动手柄选择同组位置；快捷插入首尾会立即保存",
+    instructions: String = idleHint,
     content: @Composable (handleModifier: Modifier, thumbnailHandle: @Composable (Uuid, () -> Unit) -> Modifier) -> Unit,
 ) {
     val handleModifier = lorebookInsertionHandle(state, enabled, longPressDrag, feedback,
@@ -75,29 +81,29 @@ internal fun LorebookInsertionSafetyArea(
             Modifier.padding(if (compact) 6.dp else 8.dp),
             verticalArrangement = Arrangement.spacedBy(if (compact) 2.dp else 4.dp),
         ) {
-            val status = when (dragFeedback.phase) {
-                LorebookDragPhase.IDLE -> idleHint
-                LorebookDragPhase.SAFE -> "安全区内 · 插入已暂停；向下拖出安全区继续"
-                LorebookDragPhase.INSERTION -> if (dragFeedback.placement != null) {
-                    "正在选择插入位置 · 松手插入指示线处"
-                } else "此处没有同组目标 · 请拖至所属分组"
-                LorebookDragPhase.OUTSIDE -> "插入已暂停 · 请移回下方列表继续，或返回安全区"
-            }
-            if (compact) {
-                val compactStatus = when (dragFeedback.phase) {
-                    LorebookDragPhase.IDLE -> if (enabled) "长按拖动" else idleHint
+            var showInstructions by remember { mutableStateOf(false) }
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text(title, Modifier.weight(1f), style = MaterialTheme.typography.titleSmall,
+                    maxLines = 1, overflow = TextOverflow.Ellipsis)
+                val status = when (dragFeedback.phase) {
+                    LorebookDragPhase.IDLE -> null
                     LorebookDragPhase.SAFE, LorebookDragPhase.OUTSIDE -> "已暂停"
-                    LorebookDragPhase.INSERTION -> if (dragFeedback.placement != null) "松手插入" else "请选择同组"
+                    LorebookDragPhase.INSERTION -> if (dragFeedback.placement != null) "松手插入" else "请选择位置"
                 }
-                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    Text(title, Modifier.weight(1f), style = MaterialTheme.typography.titleSmall,
-                        maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    Text(compactStatus, Modifier.widthIn(max = 110.dp), style = MaterialTheme.typography.labelSmall,
-                        maxLines = 1, overflow = TextOverflow.Ellipsis)
+                status?.let { Text(it, style = MaterialTheme.typography.labelSmall) }
+                Box {
+                    androidx.compose.runtime.CompositionLocalProvider(
+                        androidx.compose.material3.LocalMinimumInteractiveComponentSize provides 32.dp,
+                    ) {
+                        IconButton(onClick = { showInstructions = !showInstructions },
+                            modifier = Modifier.size(32.dp).semantics { contentDescription = "插入操作说明" }) {
+                            Text("ⓘ", style = MaterialTheme.typography.titleMedium)
+                        }
+                    }
+                    if (showInstructions) LorebookReadOnlyPopup("操作说明", "lorebook-insertion-help", "关闭说明", { showInstructions = false }) {
+                        Text(instructions, style = MaterialTheme.typography.bodyMedium)
+                    }
                 }
-            } else {
-                Text(title, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Text(status, style = MaterialTheme.typography.bodySmall, minLines = 2, maxLines = 2)
             }
             val previewModifier = if (compact) Modifier else Modifier.weight(1f, fill = false)
                 .verticalScroll(rememberScrollState())
