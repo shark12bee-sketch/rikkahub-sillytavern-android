@@ -25,28 +25,34 @@ class LorebookEntryOrderTest {
         displayIndex = 99,
     )
 
+    private fun move(entries: List<PromptInjection.RegexInjection>, from: Uuid, to: Uuid): List<PromptInjection.RegexInjection> {
+        val target = entries.firstOrNull { it.id == to } ?: return entries
+        return moveLorebookEntry(entries, from, LorebookEntryPlacement(to,
+            entries.indexOfFirst { it.id == from } < entries.indexOf(target), target.group.ifBlank { "" }))
+    }
+
     @Test
-    fun `reordering preserves other group slots and every entry field`() {
+    fun `a single drop preserves unselected relative order and every entry field`() {
         val a = entry("a", "group")
         val b = entry("other", "other")
         val c = entry("c", "group")
         val d = entry("d", "group")
         val entries = listOf(a, b, c, d)
-        val moved = moveLorebookEntry(entries, a.id, d.id)
-        assertEquals(listOf(c, b, d, a), moved)
+        val moved = move(entries, a.id, d.id)
+        assertEquals(listOf(b, c, d, a), moved)
         entries.forEach { original -> assertSame(original, moved.single { it.id == original.id }) }
-        assertEquals(entries, moveLorebookEntry(moved, a.id, c.id))
+        assertEquals(listOf(b, a, c, d), move(moved, a.id, c.id))
     }
 
     @Test
-    fun `cross group missing and identical targets are no ops`() {
+    fun `cross group drops update membership while stale and identical targets are no ops`() {
         val a = entry("a", "A")
         val b = entry("b", "B")
         val entries = listOf(a, b)
-        assertSame(entries, moveLorebookEntry(entries, a.id, b.id))
-        assertSame(entries, moveLorebookEntry(entries, a.id, Uuid.random()))
-        assertSame(entries, moveLorebookEntry(entries, Uuid.random(), a.id))
-        assertSame(entries, moveLorebookEntry(entries, a.id, a.id))
+        assertEquals(listOf(b, a.copy(group = "B")), move(entries, a.id, b.id))
+        assertSame(entries, move(entries, a.id, Uuid.random()))
+        assertSame(entries, move(entries, Uuid.random(), a.id))
+        assertSame(entries, move(entries, a.id, a.id))
     }
 
     @Test
@@ -95,7 +101,7 @@ class LorebookEntryOrderTest {
     @Test
     fun `native export import retains reordered entries and semantic fields`() {
         val entries = listOf(entry("a", "A"), entry("b", "B"), entry("c", "A"))
-        val reordered = moveLorebookEntry(entries, entries[0].id, entries[2].id)
+        val reordered = move(entries, entries[0].id, entries[2].id)
         val book = Lorebook(name = "test", entries = reordered)
         val json = LorebookSerializer.exportToJson(book)
         val imported = LorebookSerializer.importFromJson(json, "test")
@@ -112,8 +118,8 @@ class LorebookEntryOrderTest {
         val originals = entries.associateBy { it.id }
         repeat(100) {
             val group = entries.filter { it.group == "group 0" }
-            entries = moveLorebookEntry(entries, group.first().id, group.last().id)
-            entries = moveLorebookEntry(entries, Uuid.random(), group.last().id)
+            entries = move(entries, group.first().id, group.last().id)
+            entries = move(entries, Uuid.random(), group.last().id)
         }
         assertEquals(originals, entries.associateBy { it.id })
         assertEquals(1000, entries.map { it.id }.distinct().size)

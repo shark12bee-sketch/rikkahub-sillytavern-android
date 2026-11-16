@@ -19,12 +19,16 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.LocalPinnableContainer
+import androidx.compose.ui.layout.PinnableContainer
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.LocalViewConfiguration
 import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.semantics
 import kotlin.uuid.Uuid
 
 internal data class LorebookThumbnailWindow(val firstIndex: Int = 0, val offset: Int = 0)
+internal enum class LorebookDragSource { SHELF, LIST }
 
 internal data class LorebookInsertionDrag(
     val token: Uuid = Uuid.random(),
@@ -35,6 +39,8 @@ internal data class LorebookInsertionDrag(
     val last: Offset = start,
     val released: Boolean = false,
     val submitted: Boolean = false,
+    val source: LorebookDragSource = LorebookDragSource.SHELF,
+    val hasMoved: Boolean = false,
 )
 
 /** One detector for both thumbnail and group handles; layout never determines the drop target. */
@@ -47,50 +53,71 @@ internal fun lorebookInsertionHandle(
     onConfirm: (Uuid?, LorebookEntryPlacement) -> Unit,
     entryId: Uuid? = null,
     onTap: (() -> Unit)? = null,
+    source: LorebookDragSource = LorebookDragSource.SHELF,
+    origin: (() -> Rect?)? = null,
 ): Modifier {
     var coordinates by remember { mutableStateOf<LayoutCoordinates?>(null) }
     val currentFeedback by rememberUpdatedState(feedback)
     val currentConfirm by rememberUpdatedState(onConfirm)
     val currentTap by rememberUpdatedState(onTap)
+    val currentOrigin by rememberUpdatedState(origin)
+    val pinnable = LocalPinnableContainer.current
+    var pinned: PinnableContainer.PinnedHandle? = null
     val haptic = LocalHapticFeedback.current
+    val touchSlop = LocalViewConfiguration.current.touchSlop
 
     fun root(position: Offset) = coordinates?.takeIf { it.isAttached }?.localToRoot(position)
     fun update(position: Offset) {
         root(position)?.let { point ->
             state.pointer = LorebookDragPoint(point.x, point.y)
-            state.drag = state.drag?.copy(last = point)
+            state.drag = state.drag?.let { it.copy(last = point, hasMoved = it.hasMoved || (point - it.start).getDistance() > touchSlop) }
+            state.previousPlacement = currentFeedback().placement
         }
     }
-    fun start(position: Offset) {
-        val point = root(position) ?: return
-        val bounds = if (entryId == null) state.previewBounds else coordinates?.boundsInRoot()
+    fun start(position: Offset): Uuid? {
+        if (state.pointer != null) return null
+        val point = root(position) ?: return null
+        val bounds = if (source == LorebookDragSource.LIST) currentOrigin?.invoke()
+            else if (entryId == null) state.previewBounds else coordinates?.boundsInRoot()
         if (bounds != null) {
-            state.drag = LorebookInsertionDrag(entryId = entryId, origin = bounds, start = point, window = state.previewWindow)
+            state.previousPlacement = null
+            state.drag = LorebookInsertionDrag(entryId = entryId, origin = bounds, start = point, window = state.previewWindow, source = source)
+            if (source == LorebookDragSource.LIST) pinned = pinnable?.pin()
             haptic.performHapticFeedback(HapticFeedbackType.GestureThresholdActivate)
-        }
+        } else return null
         update(position)
+        return state.drag?.token
     }
     fun finish(position: Offset?, cancelled: Boolean) {
         if (position != null) update(position)
         val target = if (cancelled) null else currentFeedback().placement
         state.pointer = null
+        state.previousPlacement = null
         state.drag = state.drag?.copy(released = true, submitted = target != null)
         haptic.performHapticFeedback(HapticFeedbackType.GestureEnd)
-        if (target != null) currentConfirm(entryId, target)
+        try {
+            if (target != null) currentConfirm(entryId, target)
+        } finally {
+            pinned?.release()
+            pinned = null
+        }
     }
 
     val tapSemantics = if (onTap == null) Modifier else Modifier.semantics {
         onClick(label = "查看条目预览") { currentTap?.invoke(); true }
     }
     return Modifier.onGloballyPositioned { coordinates = it }.then(tapSemantics)
-        .pointerInput(state, longPress, enabled, entryId) {
+        .pointerInput(state, longPress, enabled, entryId, source) {
             if (!enabled) return@pointerInput
+            var ownedToken: Uuid? = null
+            fun ownsGesture() = ownedToken != null && state.drag?.token == ownedToken
             if (longPress) awaitEachGesture {
                 try {
                     val down = awaitFirstDown()
                     val held = awaitLongPressOrCancellation(down.id)
                     if (held != null) {
-                        start(held.position)
+                        ownedToken = start(held.position)
+                        if (!ownsGesture()) return@awaitEachGesture
                         val released = drag(held.id) { change -> change.consume(); update(change.position) }
                         val up = currentEvent.changes.firstOrNull { !it.pressed }
                         if (released && up != null) { up.consume(); finish(up.position, false) }
@@ -101,14 +128,14 @@ internal fun lorebookInsertionHandle(
                         if (up != null) { currentTap?.invoke(); up.consume() }
                     }
                 } finally {
-                    if (state.pointer != null) finish(null, true)
+                    if (ownsGesture() && state.pointer != null) finish(null, true)
                 }
             } else detectDragGestures(
                 orientationLock = null,
-                onDragStart = { down, change, _ -> start(down.position); update(change.position) },
-                onDragCancel = { finish(null, true) },
-                onDragEnd = { finish(it.position, false) },
-                onDrag = { change, _ -> change.consume(); update(change.position) },
+                onDragStart = { down, change, _ -> ownedToken = start(down.position); if (ownsGesture()) update(change.position) },
+                onDragCancel = { if (ownsGesture()) finish(null, true) },
+                onDragEnd = { if (ownsGesture()) finish(it.position, false) },
+                onDrag = { change, _ -> if (ownsGesture()) { change.consume(); update(change.position) } },
             )
         }
 }

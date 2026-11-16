@@ -75,7 +75,7 @@ class LorebookEntryBatchUiTest {
         compose.onNodeWithText("取消待插入").performClick()
         compose.runOnIdle { assertEquals(original, stored); assertEquals(original, draft) }
         begin()
-        compose.onNodeWithText("全选条目").performClick()
+        compose.onNodeWithText("全选该组").performClick()
         compose.onNodeWithText("取消全选").performClick()
         select("Two")
         select("One")
