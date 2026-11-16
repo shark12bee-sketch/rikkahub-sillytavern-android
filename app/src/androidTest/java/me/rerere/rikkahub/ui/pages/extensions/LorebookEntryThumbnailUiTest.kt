@@ -41,7 +41,13 @@ class LorebookEntryThumbnailUiTest {
     private fun tile(entry: PromptInjection.RegexInjection) = compose.onNodeWithTag("lorebook-thumbnail-${entry.id}")
 
     private fun screenshot(name: String) {
+        // Semantics can be current before SurfaceFlinger presents the frame, especially with
+        // the test clock paused during a held pointer. Let the native capture catch up too.
+        compose.mainClock.advanceTimeByFrame()
+        compose.waitForIdle()
         val instrumentation = InstrumentationRegistry.getInstrumentation()
+        instrumentation.waitForIdleSync()
+        SystemClock.sleep(150)
         val dir = File(checkNotNull(instrumentation.targetContext.getExternalFilesDir(null)), "round6-layout").apply { mkdirs() }
         val bitmap = checkNotNull(instrumentation.uiAutomation.takeScreenshot())
         File(dir, "$name.png").outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
@@ -98,9 +104,14 @@ class LorebookEntryThumbnailUiTest {
         handle.performTouchInput { down(Offset(width * 0.3f, height * 0.7f)) }
         compose.mainClock.advanceTimeBy(700)
         compose.onNodeWithTag("lorebook-entry-preview").assertDoesNotExist()
+        val liftedBefore = compose.onNodeWithTag("lorebook-lifted-batch").fetchSemanticsNode().boundsInRoot
         handle.performTouchInput { moveTo(Offset(bounds.width * 0.3f, target.center.y + 4f - bounds.top)) }
         compose.mainClock.advanceTimeBy(64)
         compose.onNodeWithText("松手插入").assertIsDisplayed()
+        val liftedAfter = compose.onNodeWithTag("lorebook-lifted-batch").fetchSemanticsNode().boundsInRoot
+        val expectedDelta = target.center.y + 4f - bounds.top - bounds.height * 0.7f
+        assertEquals("The lifted object must follow the actual pointer, for both single and group drags",
+            expectedDelta, liftedAfter.top - liftedBefore.top, 1f)
         if (capture != null) screenshot(capture)
         handle.performTouchInput { up() }
         compose.mainClock.autoAdvance = true
