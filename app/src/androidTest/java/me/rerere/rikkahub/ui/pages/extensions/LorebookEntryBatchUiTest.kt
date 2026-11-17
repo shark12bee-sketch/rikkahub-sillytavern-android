@@ -41,6 +41,7 @@ class LorebookEntryBatchUiTest {
         assertEquals("👨‍👩‍👧‍👦", lorebookThumbnailCharacter("👨‍👩‍👧‍👦 family"))
     }
 
+    @LorebookSelectionIntegration
     @Test fun selectInReverseOrderCancelAndMoveWithoutChangingDataUntilCommit() {
         val original = Lorebook(entries = listOf("One", "Two", "Three").map {
             PromptInjection.RegexInjection(name = it, content = it)

@@ -79,6 +79,7 @@ class LorebookEntryRepairUiTest {
         compose.onNodeWithText("组内：${group.ifBlank { "未分组" }}").performClick()
     }
 
+    @LorebookSelectionIntegration
     @Test fun explicitScopeStaysIndependentAcrossManualCrossGroupSelectionAndScopedToggles() {
         showSheet()
         begin("移动到本书其他位置")
@@ -144,6 +145,7 @@ class LorebookEntryRepairUiTest {
         compose.onNodeWithTag("lorebook-insertion-safety-area").assertDoesNotExist()
     }
 
+    @LorebookSelectionIntegration
     @Test fun deletingWholeSelectedGroupKeepsEmptyGroupAndSurvivesReopen() {
         showSheet()
         begin("删除条目")

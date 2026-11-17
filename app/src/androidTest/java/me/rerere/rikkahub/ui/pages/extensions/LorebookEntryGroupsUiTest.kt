@@ -130,6 +130,7 @@ class LorebookEntryGroupsUiTest {
         }
     }
 
+    @LorebookSelectionIntegration
     @Test fun scopedSelectionMovesToChosenGroupOnlyAfterConfirmationAndCanReturnToUngrouped() {
         showSheet()
         fun select() {
