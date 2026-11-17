@@ -121,6 +121,7 @@ import me.rerere.rikkahub.ui.hooks.readBooleanPreference
 import me.rerere.rikkahub.ui.hooks.rememberExporter
 import me.rerere.rikkahub.ui.hooks.rememberImporter
 import me.rerere.rikkahub.data.model.InjectionPosition
+import me.rerere.rikkahub.data.model.orderedEntries
 import me.rerere.rikkahub.data.model.Lorebook
 import me.rerere.rikkahub.data.model.RegexGroup
 import me.rerere.rikkahub.data.model.RegexGroupSource
@@ -1370,6 +1371,7 @@ internal fun LorebookEditSheet(
     var selecting by rememberSaveable(book.id.toString()) { mutableStateOf(false) }
     var selectionMode by rememberSaveable(book.id.toString()) { mutableStateOf(LorebookBatchMode.MOVE.name) }
     var showGroupManagement by remember { mutableStateOf(false) }
+    var showCategoryManagement by remember { mutableStateOf(false) }
     var groupMoveConfirmation by remember { mutableStateOf<LorebookBatchRequest?>(null) }
     var showBulkSettings by remember { mutableStateOf(false) }
     var deleteConfirmation by remember { mutableStateOf<LorebookBatchRequest?>(null) }
@@ -1535,7 +1537,7 @@ internal fun LorebookEditSheet(
                 book.entries, selectedIds, LorebookBatchMode.valueOf(selectionMode),
                 onSelect = { selectedStrings = it.map(Uuid::toString) },
                 onDone = {
-                    val ordered = orderedLorebookSelection(book.entries, selectedIds)
+                    val ordered = orderedLorebookSelection(book.orderedEntries(), selectedIds)
                     try {
                         if (selectionMode == LorebookBatchMode.SETTINGS.name) {
                             showBulkSettings = true
@@ -1563,6 +1565,11 @@ internal fun LorebookEditSheet(
                         LorebookBatchAction.Move(ids), LorebookEntryPlacement.groupEdge(group, true))
                 },
             )
+            if (selecting && selectionMode == LorebookBatchMode.MOVE.name) LorebookCategorySelector(
+                book, null, !savingBatch && !copyBusy && selectedIds.isNotEmpty(), label = "归入分类（保留互斥组）") { category ->
+                if (selectedIds.isNotEmpty()) groupMoveConfirmation = LorebookBatchRequest(book, baseline,
+                    LorebookBatchAction.Move(selectedIds), LorebookEntryPlacement.groupEdge(category?.toString().orEmpty(), true).copy(categoryTarget = true))
+            }
             if (savingBatch) Text("正在保存，请稍候…", style = MaterialTheme.typography.bodySmall)
             batchError?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
 
@@ -1603,9 +1610,9 @@ internal fun LorebookEditSheet(
                 },
                 onInsertPending = { placement ->
                     pendingEntry?.let { pending ->
-                        val entries = insertLorebookEntry(book.entries, pending, placement)
+                        val entries = insertLorebookEntry(book.orderedEntries(), pending, placement)
                         if (entries.any { it.id == pending.id }) {
-                            val inserted = book.withLorebookEntries(entries)
+                            val inserted = book.withPlacedEntries(entries, setOf(pending.id), placement)
                             onEdit(inserted)
                             if (placement?.targetId == null) onSave(inserted)
                             pendingEntryJson = null
@@ -1642,6 +1649,8 @@ internal fun LorebookEditSheet(
                 onEntriesChange = { if (!savingBatch) onEdit(book.withLorebookEntries(it)) },
                 onEditEntry = { if (!savingBatch) entryEditState.open(it) },
                 onManageGroups = { showGroupManagement = true },
+                onManageCategories = { showCategoryManagement = true },
+                onAddCategoryEntry = { category -> entryEditState.open(PromptInjection.RegexInjection(categoryId = category)) },
                 onGroupsChange = { if (!savingBatch && !copyBusy) onEdit(it) },
                 onAddEntry = { group -> entryEditState.open(PromptInjection.RegexInjection(group = group)) },
                 onGroupSettings = { group, entries -> groupEditState.open(group to entries) },
@@ -1675,7 +1684,7 @@ internal fun LorebookEditSheet(
         )
     }
 
-    if (showBulkSettings) LorebookBulkSettingsDialog(orderedLorebookSelection(book.entries, selectedIds),
+    if (showBulkSettings) LorebookBulkSettingsDialog(orderedLorebookSelection(book.orderedEntries(), selectedIds),
         onDismiss = { showBulkSettings = false }, onApply = { patch ->
             showBulkSettings = false
             executeBatch(LorebookBatchRequest(book, baseline, LorebookBatchAction.Settings(selectedIds, patch)))
@@ -1687,11 +1696,12 @@ internal fun LorebookEditSheet(
             confirmButton = { TextButton(onClick = { deleteConfirmation = null; executeBatch(request) }) { Text("确认删除") } },
             dismissButton = { TextButton(onClick = { deleteConfirmation = null }) { Text("取消删除") } })
     }
+    if (showCategoryManagement) LorebookCategoryManagement(book, onEdit, { showCategoryManagement = false })
     if (showGroupManagement) LorebookGroupManagement(book, onEdit, { showGroupManagement = false })
     groupMoveConfirmation?.let { request ->
         val count = (request.action as LorebookBatchAction.Move).ids.size
         AlertDialog(onDismissRequest = { groupMoveConfirmation = null }, title = { Text("确认移入分组") },
-            text = { Text("将 $count 条移动到「${groupLabel(request.placement?.group.orEmpty())}」组内最后。仅修改归属和顺序，其余配置保留。") },
+            text = { Text("将 $count 条移动到「${if (request.placement?.categoryTarget == true) book.categories.firstOrNull { it.id.toString() == request.placement.group }?.name ?: "未分类" else groupLabel(request.placement?.group.orEmpty())}」末尾。仅修改所选类型的归属和顺序，互斥配置与分类归属独立处理。") },
             confirmButton = { TextButton(onClick = { groupMoveConfirmation = null; executeBatch(request) }) { Text("确认移动") } },
             dismissButton = { TextButton(onClick = { groupMoveConfirmation = null }) { Text("取消移动") } })
     }

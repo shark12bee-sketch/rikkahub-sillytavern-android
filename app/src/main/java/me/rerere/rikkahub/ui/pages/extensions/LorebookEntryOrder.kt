@@ -16,7 +16,7 @@ internal fun moveLorebookEntry(
         .getOrDefault(entries)
 }
 
-internal data class LorebookEntryPlacement(val targetId: Uuid?, val after: Boolean, val group: String? = null) {
+internal data class LorebookEntryPlacement(val targetId: Uuid?, val after: Boolean, val group: String? = null, val rootGroup: String? = null, val categoryTarget: Boolean = false) {
     companion object {
         fun groupEdge(group: String, atEnd: Boolean) = LorebookEntryPlacement(null, atEnd, group)
     }

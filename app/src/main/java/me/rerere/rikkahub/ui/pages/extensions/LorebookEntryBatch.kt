@@ -4,6 +4,7 @@ import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import me.rerere.rikkahub.data.model.orderedEntries
 import me.rerere.rikkahub.data.model.Lorebook
 import me.rerere.rikkahub.data.model.PromptInjection
 import kotlin.uuid.Uuid
@@ -39,6 +40,7 @@ internal fun insertLorebookBatch(
     atEnd: Boolean?,
 ): List<PromptInjection.RegexInjection> {
     require(selected.isNotEmpty()) { "没有可插入的条目，请重新选择" }
+    if (placement?.categoryTarget == true) return insertCategoryEntries(remaining, selected, placement, atEnd)
     val groups = selected.map { it.group.ifBlank { "" } }.distinct()
     val destination = placement?.group
     require(destination != null || groups.size == 1) { "跨组操作请明确选择目标分组" }
@@ -84,10 +86,10 @@ internal fun applyLorebookBatch(books: List<Lorebook>, request: LorebookBatchReq
             request.draft.entries.filterNot { it.id in action.ids }
         }
         is LorebookBatchAction.Move -> {
-            val selected = orderedLorebookSelection(request.draft.entries, action.ids)
+            val selected = orderedLorebookSelection(request.draft.orderedEntries(), action.ids)
             require(selected.size == action.ids.size) { "选中的条目已删除，请取消并重新选择" }
             insertLorebookBatch(
-                request.draft.entries.filterNot { it.id in action.ids }, selected, request.placement, request.atEnd,
+                request.draft.orderedEntries().filterNot { it.id in action.ids }, selected, request.placement, request.atEnd,
             )
         }
         is LorebookBatchAction.Copy -> {
@@ -102,12 +104,17 @@ internal fun applyLorebookBatch(books: List<Lorebook>, request: LorebookBatchReq
             val copies = orderedLorebookSelection(action.task.entries, action.ids).map { entry ->
                 var id = Uuid.random()
                 while (!occupied.add(id)) id = Uuid.random()
-                entry.copy(id = id)
+                entry.copy(id = id, categoryId = null)
             }
-            insertLorebookBatch(request.draft.entries, copies, request.placement, request.atEnd)
+            insertLorebookBatch(request.draft.orderedEntries(), copies, request.placement, request.atEnd)
         }
     }
-    val edited = request.draft.withLorebookEntries(entries)
+    val placedIds = when (val action = request.action) {
+        is LorebookBatchAction.Move -> action.ids
+        is LorebookBatchAction.Copy -> entries.map { it.id }.toSet() - request.draft.entries.map { it.id }.toSet()
+        else -> emptySet()
+    }
+    val edited = request.draft.withPlacedEntries(entries, placedIds, request.placement)
     return if (current == null) books + edited else books.map { if (it.id == edited.id) edited else it }
 }
 

@@ -39,13 +39,13 @@ internal fun LorebookGroupTargetSelector(groups: List<String>, selected: String,
 internal fun LorebookGroupManagement(book: Lorebook, onEdit: (Lorebook) -> Unit, onDismiss: () -> Unit) {
     var name by remember { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
-    AlertDialog(onDismissRequest = onDismiss, title = { Text("管理分组") }, text = {
+    AlertDialog(onDismissRequest = onDismiss, title = { Text("管理互斥组") }, text = {
         Column(Modifier.heightIn(max = 400.dp).verticalScroll(rememberScrollState())) {
-            OutlinedTextField(name, { name = it; error = null }, modifier = Modifier.testTag("lorebook-group-name"), label = { Text("新分组名称") }, singleLine = true)
+            OutlinedTextField(name, { name = it; error = null }, modifier = Modifier.testTag("lorebook-group-name"), label = { Text("新互斥组名称") }, singleLine = true)
             TextButton(onClick = {
                 runCatching { createLorebookEntryGroup(book, name) }.onSuccess { onEdit(it); name = "" }
                     .onFailure { error = it.message }
-            }) { Text("创建分组") }
+            }) { Text("创建互斥组") }
             error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
             val groups = lorebookEntryGroupNames(book)
             groups.forEachIndexed { index, group ->
@@ -59,7 +59,7 @@ internal fun LorebookGroupManagement(book: Lorebook, onEdit: (Lorebook) -> Unit,
                     if (count == 0) TextButton(onClick = { onEdit(book.copy(entryGroups = groups - group)) }) { Text("删除空组") }
                 }
             }
-            Text("分组仅记录名称与显示顺序；空组可保存。移动条目请使用批量管理。", style = MaterialTheme.typography.bodySmall)
+            Text("互斥组保留原竞争规则。空组可保存；权重等设置请使用组设置。分类请使用独立的管理分类组入口。", style = MaterialTheme.typography.bodySmall)
         }
-    }, confirmButton = { TextButton(onClick = onDismiss) { Text("完成分组管理") } })
+    }, confirmButton = { TextButton(onClick = onDismiss) { Text("完成互斥组管理") } })
 }

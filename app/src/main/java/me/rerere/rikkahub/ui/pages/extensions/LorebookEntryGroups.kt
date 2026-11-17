@@ -1,5 +1,6 @@
 package me.rerere.rikkahub.ui.pages.extensions
 
+import me.rerere.rikkahub.data.model.withOrderedEntries
 import me.rerere.rikkahub.data.model.Lorebook
 import me.rerere.rikkahub.data.model.PromptInjection
 
@@ -7,10 +8,7 @@ import me.rerere.rikkahub.data.model.PromptInjection
 internal fun lorebookEntryGroupNames(book: Lorebook): List<String> =
     (book.entryGroups + book.entries.map { it.group }).filter { it.isNotBlank() }.distinct()
 
-internal fun Lorebook.withLorebookEntries(entries: List<PromptInjection.RegexInjection>): Lorebook = copy(
-    entries = entries,
-    entryGroups = (lorebookEntryGroupNames(this) + entries.map { it.group }).filter { it.isNotBlank() }.distinct(),
-)
+internal fun Lorebook.withLorebookEntries(entries: List<PromptInjection.RegexInjection>): Lorebook = withOrderedEntries(entries)
 
 internal fun createLorebookEntryGroup(book: Lorebook, name: String): Lorebook {
     val group = name.trim()

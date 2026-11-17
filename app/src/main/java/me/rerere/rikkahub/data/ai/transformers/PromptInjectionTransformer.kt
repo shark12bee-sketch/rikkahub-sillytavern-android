@@ -16,6 +16,7 @@ import me.rerere.rikkahub.data.model.Assistant
 import me.rerere.rikkahub.data.model.AuthorNotePosition
 import me.rerere.rikkahub.data.model.InjectionPosition
 import me.rerere.rikkahub.data.model.PromptInjection
+import me.rerere.rikkahub.data.model.orderedEntries
 import me.rerere.rikkahub.data.model.Lorebook
 import me.rerere.rikkahub.data.model.TavernBookEntry
 import me.rerere.rikkahub.data.model.TavernCharacterData
@@ -605,7 +606,7 @@ internal fun collectInjections(
         // 排序顺序影响扫描顺序（概率/预算检查顺序），官方 sortFn = (a, b) => b.order - a.order（order 降序）
         // 内嵌书条目按 isCharacterBook=true 参与官方排序策略
         val sortedEntries = (
-            boundLorebooks.flatMap { book -> book.entries.map { entry -> book to entry } } +
+            boundLorebooks.flatMap { book -> book.orderedEntries().map { entry -> book to entry } } +
                 characterEntries.map { CHARACTER_BOOK_PLACEHOLDER to it }
             ).let { pairs ->
                 when (worldInfoCharacterStrategy) {
@@ -829,7 +830,8 @@ internal fun collectInjections(
             scanState = nextScanState
         }
 
-        for (entry in activatedEntries) {
+        val displayRank = sortedEntries.mapIndexed { index, pair -> pair.second.id to index }.toMap()
+        for (entry in activatedEntries.sortedBy { displayRank[it.id] ?: Int.MAX_VALUE }) {
             injections.add(entry)
             handleStickyCooldown(entry, activeStickyEntries, cooldownEntries)
         }

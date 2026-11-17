@@ -105,7 +105,7 @@ jobs:
           import xml.etree.ElementTree as ET
           cases = [case for file in Path('app/build/outputs/androidTest-results').rglob('TEST-*.xml')
                    for case in ET.parse(file).getroot().iter('testcase')]
-          expected = {'LorebookEntryLayoutTest': 6, 'LorebookEntryBatchUiTest': 3, 'LorebookEntryCopyUiTest': 2, 'LorebookEntryRailGestureTest': 3, 'LorebookEntryThumbnailUiTest': 6, 'LorebookEntryHelpUiTest': 2, 'LorebookEntryGroupsUiTest': 6, 'LorebookEntryRepairUiTest': 6, 'LorebookEntrySelectionUiTest': 3, 'LorebookEntryFinishUiTest': 5, 'LorebookEntryAllScopeUiTest': 5, 'LorebookEntrySharedSettingsUiTest': 6}
+          expected = {'LorebookEntryLayoutTest': 6, 'LorebookEntryBatchUiTest': 3, 'LorebookEntryCopyUiTest': 2, 'LorebookEntryRailGestureTest': 3, 'LorebookEntryThumbnailUiTest': 6, 'LorebookEntryHelpUiTest': 2, 'LorebookEntryGroupsUiTest': 6, 'LorebookEntryRepairUiTest': 6, 'LorebookEntrySelectionUiTest': 3, 'LorebookEntryFinishUiTest': 5, 'LorebookEntryAllScopeUiTest': 5, 'LorebookEntrySharedSettingsUiTest': 6, 'LorebookEntryUnifiedOrderUiTest': 3}
           for name, count in expected.items():
               executed = [case for case in cases if case.attrib.get('classname', '').endswith('.' + name)]
               assert len(executed) == count, (name, len(executed), count)

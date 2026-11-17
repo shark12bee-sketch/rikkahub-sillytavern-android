@@ -147,7 +147,7 @@ internal fun LorebookSelectionControls(
             Box {
                 TextButton(onClick = { showHelp = !showHelp }) { Text("ⓘ 复制说明") }
                 if (showHelp) LorebookReadOnlyPopup("复制说明", "lorebook-copy-help", "关闭说明", { showHelp = false }) {
-                    Text("完成后返回世界书列表。来源书不会修改，来源草稿的未保存修改不会写入。")
+                    Text("完成后返回世界书列表。来源书不会修改，来源草稿的未保存修改不会写入。副本使用目标所选分类；未指定目标分类时为未分类，绝不引用来源书分类。")
                 }
             }
         }
@@ -201,6 +201,18 @@ internal fun LorebookCopyShelf(task: LorebookCopyTask, busy: Boolean, onRemove: 
 internal fun lorebookCopyConfirmation(request: LorebookBatchRequest): String {
     val action = request.action as LorebookBatchAction.Copy
     val task = action.task.copy(entries = orderedLorebookSelection(action.task.entries, action.ids))
+    if (request.placement?.categoryTarget == true) {
+        val placement = request.placement
+        val category = request.draft.categories.firstOrNull { it.id.toString() == placement.group }?.name ?: "未分类"
+        val anchor = request.draft.categories.firstOrNull { it.id.toString() == placement.rootGroup }?.name
+        val target = request.draft.entries.firstOrNull { it.id == placement.targetId }
+        val position = when {
+            anchor != null -> "分类「$anchor」${if (placement.after) "之后" else "之前"}"
+            target != null -> "条目「${target.name.ifBlank { "未命名" }}」${if (placement.after) "之后" else "之前"}"
+            else -> "分类「$category」${if (placement.after) "末尾" else "最前"}"
+        }
+        return "将 ${task.entries.size} 条复制到「${request.draft.name.ifBlank { "未命名世界书" }}」的$position。\n目标分类：$category。互斥组、权重与触发配置原样保留。来源书不变；副本生成新条目 ID，不引用来源分类 ID。确认后保存当前目标草稿。"
+    }
     val group = request.placement?.group ?: task.entries.first().group
     val existingGroups = (request.draft.entryGroups + request.draft.entries.flatMap { entry ->
         listOf(entry.group) + entry.inclusionGroup.split(",").map { it.trim() }
