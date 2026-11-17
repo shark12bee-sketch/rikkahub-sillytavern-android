@@ -10,6 +10,7 @@ import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.unit.dp
@@ -171,7 +172,15 @@ class LorebookEntryRepairUiTest {
         showSheet()
         // The exclusive region is now above the root entries. Bring the actual source rail
         // fully into view; the nearby B header must remain visible in the same viewport.
-        compose.onNodeWithTag("lorebook-entry-list").performScrollToNode(hasContentDescription("拖动排序 Alpha"))
+        val list = compose.onNodeWithTag("lorebook-entry-list")
+        list.performScrollToNode(hasContentDescription("拖动排序 Alpha"))
+        // ScrollToIndex aligns the source at the top, which can hide the upper target.
+        // Align the measured source near the viewport bottom so both actual hit regions fit.
+        val viewport = list.fetchSemanticsNode().boundsInRoot
+        val source = compose.onNodeWithContentDescription("拖动排序 Alpha").fetchSemanticsNode().boundsInRoot
+        val inset = minOf(source.height, viewport.height) * 0.05f
+        list.performSemanticsAction(SemanticsActions.ScrollBy) { scroll -> scroll(0f, source.bottom - viewport.bottom + inset) }
+        compose.waitForIdle()
         compose.onNodeWithContentDescription("拖动排序 Alpha").assertIsDisplayed()
         compose.onNodeWithTag("lorebook-group:B").assertIsDisplayed()
         captureLorebookRepairEvidence("ordinary-before-drag")
