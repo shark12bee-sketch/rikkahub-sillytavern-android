@@ -24,7 +24,7 @@ class LorebookEntryAllScopeUiTest {
     }
     private fun all(label: String) {
         compose.onNodeWithTag("lorebook-selection-scope").performClick()
-        compose.onNodeWithText("全部条目", substring = false).performClick()
+        compose.onNode(hasText("全部条目") and hasAnyAncestor(isPopup())).performClick()
         compose.onNodeWithText("$label · 已选 0 条").assertIsDisplayed()
         compose.onNodeWithText("全选条目").performClick()
         compose.onNodeWithText("$label · 已选 4 条").assertIsDisplayed()
@@ -51,7 +51,7 @@ class LorebookEntryAllScopeUiTest {
     @Test fun settingsAllIncludesFoldedGroupsAndPreservesOtherFields() {
         begin("批量设置");all("批量设置")
         compose.onNodeWithText("设置所选").performClick()
-        compose.onAllNodes(isToggleable()).onFirst().performClick()
+        compose.onAllNodes(isToggleable() and hasAnyAncestor(isDialog() and hasAnyDescendant(hasText("批量设置 · 4 条")))).onFirst().performClick()
         compose.onNodeWithTag("bulk-priority").performTextReplacement("90")
         compose.onNodeWithText("应用设置").performClick()
         compose.runOnIdle { assertEquals(original.entries.map { it.copy(priority = 90) }, stored.entries) }
@@ -72,7 +72,7 @@ class LorebookEntryAllScopeUiTest {
             { selected = it }, {}, {}, groups = original.entryGroups) } }
         fun choose(label: String) {
             compose.onNodeWithTag("lorebook-selection-scope").performClick()
-            compose.onNodeWithText(label).performClick()
+            compose.onNode(hasText(label) and hasAnyAncestor(isPopup())).performClick()
         }
         choose("全部条目")
         restoration.emulateSavedInstanceStateRestore()
