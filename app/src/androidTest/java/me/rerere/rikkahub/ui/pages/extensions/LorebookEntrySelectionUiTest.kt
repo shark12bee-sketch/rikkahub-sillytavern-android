@@ -84,9 +84,9 @@ class LorebookEntrySelectionUiTest {
         for (next in LorebookBatchMode.entries) {
             compose.runOnIdle { mode = next }
             compose.onNodeWithText("全选范围：B").assertIsDisplayed()
-            compose.onNodeWithText(if (next == LorebookBatchMode.DELETE) "删除所选" else "完成选择")
+            compose.onNodeWithText(when (next) { LorebookBatchMode.DELETE -> "删除所选"; LorebookBatchMode.SETTINGS -> "设置所选"; else -> "完成选择" })
                 .assertIsEnabled().performClick()
         }
-        compose.runOnIdle { assertEquals(3, completed); assertEquals(setOf(a.id, c.id), selected) }
+        compose.runOnIdle { assertEquals(4, completed); assertEquals(setOf(a.id, c.id), selected) }
     }
 }

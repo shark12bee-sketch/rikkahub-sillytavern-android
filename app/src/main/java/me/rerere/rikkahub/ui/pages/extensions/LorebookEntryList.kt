@@ -79,6 +79,7 @@ internal fun LorebookEntryList(
     onAddEntry: (String) -> Unit,
     onGroupSettings: (String, List<PromptInjection.RegexInjection>) -> Unit,
     onManageGroups: () -> Unit = {},
+    onGroupsChange: (Lorebook) -> Unit = {},
 ) {
     var collapsed by rememberSaveable(book.id.toString()) { mutableStateOf(false) }
     var expandedGroups by rememberSaveable(book.id.toString()) { mutableStateOf(emptyList<String>()) }
@@ -118,7 +119,7 @@ internal fun LorebookEntryList(
                 }
             }
             val drag = insertion.drag
-            val scrollReady = drag == null || drag.source != LorebookDragSource.LIST || drag.hasMoved
+            val scrollReady = drag == null || drag.source == LorebookDragSource.SHELF || drag.hasMoved
             evaluateLorebookEntryDrag(
                 pointer = insertion.pointer,
                 safety = insertion.safetyBounds,
@@ -130,6 +131,7 @@ internal fun LorebookEntryList(
                 canScrollForward = listState.canScrollForward && scrollReady,
                 previous = insertion.previousPlacement,
                 switchThreshold = switchThreshold,
+                draggedGroup = insertion.drag?.takeIf { it.source == LorebookDragSource.GROUP }?.groupName,
                 draggedEntryId = insertion.drag?.takeIf { it.source == LorebookDragSource.LIST }?.entryId,
             )
         }
@@ -222,7 +224,11 @@ internal fun LorebookEntryList(
                     val expanded = group.isBlank() || group in expandedGroups
                     item(key = "group:$group") {
                         DisposableEffect(group) { onDispose { measuredTargets.remove("group:$group") } }
-                        Box(Modifier.fillMaxWidth().testTag("lorebook-group:$group").onGloballyPositioned { coordinates ->
+                        var headerCoordinates by remember { mutableStateOf<LayoutCoordinates?>(null) }
+                        Box(Modifier.animateItem().fillMaxWidth().promptDragPlaceholder(insertion.drag?.let {
+                            it.source == LorebookDragSource.GROUP && it.groupName == group && !it.released
+                        } == true).testTag("lorebook-group:$group").onGloballyPositioned { coordinates ->
+                            headerCoordinates = coordinates
                             val top = coordinates.localToRoot(Offset.Zero).y
                             measuredTargets["group:$group"] = LorebookDropTarget(null, group, top, top + coordinates.size.height)
                         }) {
@@ -237,11 +243,20 @@ internal fun LorebookEntryList(
                             },
                             onGroupSettings = { onGroupSettings(group, entries) },
                             onAddEntry = { if (!taskActive) onAddEntry(group) },
+                            headerGesture = if (taskActive || batchBusy) null else lorebookInsertionHandle(
+                                insertion, true, true, feedback = { feedback },
+                                onConfirm = { _, placement -> placement.group?.let { onGroupsChange(moveLorebookGroup(book, group, it, placement.after)) } },
+                                onTap = { expandedGroups = if (expanded) expandedGroups - group else expandedGroups + group },
+                                source = LorebookDragSource.GROUP, groupName = group,
+                                origin = { headerCoordinates?.takeIf { it.isAttached }?.let { c ->
+                                    androidx.compose.ui.geometry.Rect(c.localToRoot(Offset.Zero), androidx.compose.ui.geometry.Size(c.size.width.toFloat(), c.size.height.toFloat()))
+                                } },
+                            ).semantics(mergeDescendants = true) { contentDescription = "拖动分组 $group" },
                             canAddEntry = !taskActive,
                             canEditGroup = !taskActive && entries.isNotEmpty(),
                         )
-                        if (feedback.placement?.targetId == null && feedback.placement?.group == group) {
-                            HorizontalDivider(Modifier.align(Alignment.BottomCenter), thickness = 3.dp, color = MaterialTheme.colorScheme.primary)
+                        if (feedback.placement?.targetId == null && feedback.placement?.group == group && !(insertion.drag?.source == LorebookDragSource.GROUP && feedback.placement?.after == true && expanded && entries.isNotEmpty())) {
+                            HorizontalDivider(Modifier.align(if (insertion.drag?.source == LorebookDragSource.GROUP && feedback.placement?.after == false) Alignment.TopCenter else Alignment.BottomCenter), thickness = 3.dp, color = MaterialTheme.colorScheme.primary)
                         }
                         }
                     }
@@ -254,7 +269,7 @@ internal fun LorebookEntryList(
                             measuredTargets[entry.id.toString()] = LorebookDropTarget(entry.id, group, top, top + coordinates.size.height)
                         }) {
                             Box(Modifier.promptDragPlaceholder(insertion.drag?.let {
-                                it.source == LorebookDragSource.LIST && it.entryId == entry.id && !it.released
+                                !it.released && ((it.source == LorebookDragSource.LIST && it.entryId == entry.id) || (it.source == LorebookDragSource.GROUP && it.groupName == group))
                             } == true)) {
                                 RegexInjectionEntryCard(
                                     entry = entry,
@@ -297,7 +312,7 @@ internal fun LorebookEntryList(
                                     color = MaterialTheme.colorScheme.primary,
                                 )
                             }
-                            if (feedback.placement?.targetId == entry.id && feedback.placement?.after == true) {
+                            if ((feedback.placement?.targetId == entry.id && feedback.placement?.after == true) || (insertion.drag?.source == LorebookDragSource.GROUP && feedback.placement?.targetId == null && feedback.placement?.group == group && feedback.placement?.after == true && entry.id == entries.lastOrNull()?.id)) {
                                 HorizontalDivider(
                                     modifier = Modifier.align(Alignment.BottomCenter),
                                     thickness = 3.dp,
@@ -312,7 +327,16 @@ internal fun LorebookEntryList(
                 }
             }
         }
-        if (insertion.drag?.source == LorebookDragSource.LIST) {
+        if (insertion.drag?.source == LorebookDragSource.GROUP) {
+            val drag = checkNotNull(insertion.drag)
+            val count = remember(drag.token) { book.entries.count { it.group == drag.groupName } }
+            LorebookInsertionOverlay(insertion, rootOrigin) {
+                androidx.compose.material3.Surface(Modifier.width(with(LocalDensity.current) { drag.origin.width.toDp() }).shadow(4.dp, MaterialTheme.shapes.large),
+                    shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.surfaceContainerHigh) {
+                    Text("${drag.groupName} · $count 条", Modifier.padding(16.dp))
+                }
+            }
+        } else if (insertion.drag?.source == LorebookDragSource.LIST) {
             val drag = checkNotNull(insertion.drag)
             val visualEntry = remember(drag.token) { book.entries.firstOrNull { it.id == drag.entryId } }
             val visualCollapsed = remember(drag.token) { collapsed }

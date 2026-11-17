@@ -20,3 +20,12 @@ internal fun createLorebookEntryGroup(book: Lorebook, name: String): Lorebook {
 }
 
 internal fun groupLabel(group: String) = group.ifBlank { "未分组" }
+
+/** Reorder metadata only: entry IDs, group membership and all per-entry values stay untouched. */
+internal fun moveLorebookGroup(book: Lorebook, source: String, target: String, after: Boolean): Lorebook {
+    val names = lorebookEntryGroupNames(book)
+    if (source == target || source !in names || target !in names) return book
+    val remaining = names.filterNot { it == source }.toMutableList()
+    remaining.add(remaining.indexOf(target) + if (after) 1 else 0, source)
+    return book.copy(entryGroups = remaining)
+}

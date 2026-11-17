@@ -35,17 +35,20 @@ internal fun evaluateLorebookEntryDrag(
     previous: LorebookEntryPlacement? = null,
     switchThreshold: Float = 0f,
     draggedEntryId: Uuid? = null,
+    draggedGroup: String? = null,
 ): LorebookDragFeedback {
     if (pointer == null) return LorebookDragFeedback(LorebookDragPhase.IDLE)
     if (safety?.contains(pointer) == true) return LorebookDragFeedback(LorebookDragPhase.SAFE)
     if (viewport == null || !viewport.contains(pointer)) return LorebookDragFeedback(LorebookDragPhase.OUTSIDE)
 
-    val visible = targets.filter { it.bottom > viewport.top && it.top < viewport.bottom }
+    val effectiveTargets = if (draggedGroup == null) targets else targets.filter { it.group.isNotBlank() }
+        .groupBy { it.group }.map { (name, rows) -> LorebookDropTarget(null, name, rows.minOf { it.top }, rows.maxOf { it.bottom }) }
+    val visible = effectiveTargets.filter { it.bottom > viewport.top && it.top < viewport.bottom }
     val hit = visible.firstOrNull { pointer.y >= it.top && pointer.y < it.bottom }
     val target = hit ?: visible.filterNot { draggedEntryId != null && it.id == draggedEntryId }
         .minByOrNull { minOf(abs(pointer.y - it.top), abs(pointer.y - it.bottom)) }
-    val placement = target?.takeUnless { draggedEntryId != null && it.id == draggedEntryId }?.let {
-        if (it.id == null) LorebookEntryPlacement.groupEdge(it.group, true)
+    val placement = target?.takeUnless { (draggedEntryId != null && it.id == draggedEntryId) || it.group == draggedGroup }?.let {
+        if (it.id == null) LorebookEntryPlacement.groupEdge(it.group, if (draggedGroup == null) true else pointer.y > (it.top + it.bottom) / 2f)
         else {
             val midpoint = (it.top + it.bottom) / 2f
             val margin = switchThreshold.coerceIn(0f, (it.bottom - it.top) * 0.15f)
