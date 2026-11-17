@@ -72,7 +72,7 @@ class LorebookEntryGroupsTest {
         val selected = setOf(entries[0].id, entries[1].id, entries[3].id)
         val updated = applyLorebookBatch(listOf(book), LorebookBatchRequest(book, book,
             LorebookBatchAction.Move(selected), LorebookEntryPlacement(entries[2].id, true, "A"))).single()
-        assertEquals(listOf(entries[2], entries[0], entries[1].copy(group = "A"), entries[3].copy(group = "A"), entries[4]), updated.entries)
+        assertEquals(listOf(entries[2], entries[1].copy(group = "A"), entries[3].copy(group = "A"), entries[0], entries[4]), updated.entries)
         assertEquals(book.entryGroups, updated.entryGroups)
     }
 

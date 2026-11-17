@@ -56,7 +56,10 @@ class LorebookEntryRepairUiTest {
         compose.onNodeWithText(mode).performClick()
     }
 
+    private val expandedForSelection = mutableSetOf<String>()
     private fun select(name: String) {
+        val group = draft.entries.first { it.name == name }.group
+        if (group.isNotBlank() && expandedForSelection.add(group)) expand(group)
         compose.onNodeWithTag("lorebook-entry-list").performScrollToNode(hasContentDescription("选择条目 $name"))
         compose.onNodeWithContentDescription("选择条目 $name").performClick()
     }
@@ -77,14 +80,14 @@ class LorebookEntryRepairUiTest {
 
     private fun chooseScope(group: String) {
         compose.onNodeWithTag("lorebook-selection-scope").performClick()
-        compose.onNodeWithText("组内：${group.ifBlank { "未分组" }}").performClick()
+        compose.onNodeWithText("${if (group.isBlank()) "未分类条目" else "互斥组：$group"}").performClick()
     }
 
     @LorebookSelectionIntegration
     @Test fun explicitScopeStaysIndependentAcrossManualCrossGroupSelectionAndScopedToggles() {
         showSheet()
         begin("移动到本书其他位置")
-        fun scope(group: String) = compose.onNodeWithText("全选范围：$group").assertIsDisplayed()
+        fun scope(group: String) = compose.onNodeWithText("全选范围：${if (group == "未分组") "未分类条目" else "互斥组 · $group"}").assertIsDisplayed()
         fun count(n: Int) = compose.onNodeWithText("批量移动 · 已选 $n 条").assertIsDisplayed()
         scope("未分组")
         select("Alpha")
@@ -170,6 +173,7 @@ class LorebookEntryRepairUiTest {
         draft = before
         stored = before
         showSheet()
+        expand("A")
         // The exclusive region is now above the root entries. Bring the actual source rail
         // fully into view; the nearby B header must remain visible in the same viewport.
         val list = compose.onNodeWithTag("lorebook-entry-list")
@@ -187,9 +191,10 @@ class LorebookEntryRepairUiTest {
         dragTo(compose.onNodeWithContentDescription("拖动排序 Alpha"), compose.onNodeWithTag("lorebook-group:B"))
         compose.runOnIdle {
             assertEquals(1, writes)
-            assertEquals(listOf(anchor, a.copy(group = "B"), ungrouped), draft.entries)
+            assertEquals(listOf(a.copy(group = "B"), anchor, ungrouped), draft.entries)
             assertEquals(before, stored)
         }
+        expand("B")
         compose.onNodeWithTag("lorebook-entry-list").performScrollToNode(hasContentDescription("拖动排序 Alpha"))
         captureLorebookRepairEvidence("ordinary-group-drop")
         val confirm = InstrumentationRegistry.getInstrumentation().targetContext.getString(R.string.prompt_page_confirm)
@@ -206,6 +211,7 @@ class LorebookEntryRepairUiTest {
                     onEditEntry = {}, onAddEntry = {}, onGroupSettings = { _, _ -> })
             }
         }
+        compose.onNodeWithText("A").performClick()
         val handle = compose.onNodeWithContentDescription("拖动排序 Alpha")
         dragTo(handle, compose.onNodeWithTag("lorebook-group:B"), cancel = true)
         compose.runOnIdle { assertEquals(original, draft); assertEquals(0, writes) }
@@ -213,7 +219,10 @@ class LorebookEntryRepairUiTest {
         compose.runOnIdle { assertEquals(a.copy(group = "Empty"), draft.entries.single { it.id == a.id }) }
         compose.onNodeWithTag("lorebook-entry-list").performScrollToNode(hasContentDescription("拖动排序 Alpha"))
         compose.runOnIdle { writes = 0 }
-        dragTo(handle, compose.onNodeWithTag("lorebook-group:"))
+        compose.onNodeWithText("Empty").performClick()
+        compose.onNodeWithTag("lorebook-entry-list").performScrollToNode(hasContentDescription("拖动排序 Alpha"))
+        // Ordinary entry Loose is the actual target for release out of competition.
+        dragTo(handle, compose.onNodeWithContentDescription("拖动排序 Loose"))
         compose.runOnIdle {
             assertEquals(a.copy(group = ""), draft.entries.single { it.id == a.id })
             assertEquals(original.entries.drop(1), draft.entries.filterNot { it.id == a.id })

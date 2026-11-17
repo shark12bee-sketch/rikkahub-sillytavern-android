@@ -277,8 +277,7 @@ internal fun LorebookEntryList(
                         handleModifier = handleModifier,
                         onEdit = { onEditEntry(pendingEntry) },
                         onUpdate = onUpdatePending,
-                        exclusiveTarget = !targetIsCategory && targetGroup.isNotBlank(),
-                    onCancel = onCancelPending,
+                        onCancel = onCancelPending,
                     )
                 }
             }

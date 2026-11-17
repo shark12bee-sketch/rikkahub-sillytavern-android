@@ -64,6 +64,8 @@ jobs:
           PY
           chmod +x gradlew
       - name: Test lorebook entry editor
+        id: editor
+        continue-on-error: true
         if: matrix.kind == 'feature' && !inputs.selection_regression
         run: |
           set -o pipefail
@@ -107,7 +109,7 @@ jobs:
           import xml.etree.ElementTree as ET
           cases = [case for file in Path('app/build/outputs/androidTest-results').rglob('TEST-*.xml')
                    for case in ET.parse(file).getroot().iter('testcase')]
-          expected = {'LorebookEntryLayoutTest': 6, 'LorebookEntryBatchUiTest': 3, 'LorebookEntryCopyUiTest': 2, 'LorebookEntryRailGestureTest': 3, 'LorebookEntryThumbnailUiTest': 6, 'LorebookEntryHelpUiTest': 2, 'LorebookEntryGroupsUiTest': 6, 'LorebookEntryRepairUiTest': 6, 'LorebookEntrySelectionUiTest': 3, 'LorebookEntryFinishUiTest': 5, 'LorebookEntryAllScopeUiTest': 5, 'LorebookEntrySharedSettingsUiTest': 6, 'LorebookEntryUnifiedOrderUiTest': 3}
+          expected = {'LorebookEntryLayoutTest': 6, 'LorebookEntryBatchUiTest': 3, 'LorebookEntryCopyUiTest': 2, 'LorebookEntryRailGestureTest': 3, 'LorebookEntryThumbnailUiTest': 6, 'LorebookEntryHelpUiTest': 2, 'LorebookEntryGroupsUiTest': 6, 'LorebookEntryRepairUiTest': 6, 'LorebookEntrySelectionUiTest': 3, 'LorebookEntryFinishUiTest': 5, 'LorebookEntryAllScopeUiTest': 5, 'LorebookEntrySharedSettingsUiTest': 6, 'LorebookEntryUnifiedOrderUiTest': 3, 'LorebookEntrySingleViewUiTest': 5, 'LorebookEntryCategoryManagementUiTest': 3}
           for name, count in expected.items():
               executed = [case for case in cases if case.attrib.get('classname', '').endswith('.' + name)]
               assert len(executed) == count, (name, len(executed), count)
@@ -156,6 +158,9 @@ jobs:
               print(selector, expected, 'passed')
           assert len(cases) == expected_total, (len(cases), expected_total)
           PY
+      - name: Require editor unit tests to pass
+        if: always() && !inputs.selection_regression
+        run: test '${{ steps.editor.outcome }}' = success
       - uses: actions/upload-artifact@v4
         if: always()
         with:

@@ -25,6 +25,7 @@ fun Lorebook.orderedOrdinaryEntries(): List<PromptInjection.RegexInjection> {
 
 /** Keep organization metadata separate from storage/Prompt ordering and retain empty roots. */
 fun Lorebook.withOrderedEntries(values: List<PromptInjection.RegexInjection>): Lorebook {
+    if (values == entries) return this
     val updated = values // Existing hidden category metadata is not a reason to overwrite unrelated settings.
     val exclusiveGroups = (entryGroups + entries.map { it.group } + updated.map { it.group }).filter { it.isNotBlank() }.distinct()
     val value = copy(entries = updated, entryGroups = exclusiveGroups)

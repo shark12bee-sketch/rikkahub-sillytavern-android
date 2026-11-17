@@ -92,7 +92,7 @@ class LorebookEntryFinishUiTest {
     }
     @Test fun copyExplanationIsCollapsedWithoutChangingSelectionScope() {
         compose.setContent { MaterialTheme { LorebookSelectionControls(listOf(a, b), emptySet(), LorebookBatchMode.COPY, {}, {}, {}) } }
-        compose.onNodeWithText("全选范围：未分组").assertIsDisplayed()
+        compose.onNodeWithText("全选范围：未分类条目").assertIsDisplayed()
         compose.onNodeWithText("完成后返回世界书列表。", substring = true).assertDoesNotExist()
         compose.onNodeWithText("ⓘ 复制说明").performClick()
         compose.onNodeWithText("完成后返回世界书列表。", substring = true).assertIsDisplayed()

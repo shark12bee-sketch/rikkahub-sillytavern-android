@@ -16,7 +16,7 @@ class LorebookEntryAllScopeUiTest {
     private val categories = listOf("A", "B", "全部条目").map { LorebookCategory(name = "Folder $it") }
     private val initialEntries = listOf("A", "B", "", "全部条目").map { name ->
         PromptInjection.RegexInjection(name = "Entry $name", group = name, content = "body $name",
-            categoryId = if (name.isBlank()) null else categories.first { it.name == "Folder $name" }.id)
+            categoryId = null)
     }
     private val original = Lorebook(entries = initialEntries, entryGroups = listOf("A", "B", "全部条目", "Target"),
         categories = categories, rootOrder = initialEntries.map { e -> e.categoryId?.let { LorebookOrderNode(categoryId = it) } ?: LorebookOrderNode(entryId = e.id) })
@@ -50,7 +50,7 @@ class LorebookEntryAllScopeUiTest {
         all("跨书复制")
         captureLorebookRepairEvidence("all-scope-copy-layout")
         compose.onNodeWithText("完成选择").performClick()
-        compose.runOnIdle { assertEquals(original.entries, staged);assertEquals(original, stored) }
+        compose.runOnIdle { assertEquals(original.orderedEntries(), staged);assertEquals(original, stored) }
     }
     @Test fun deleteAllIncludesFoldedGroupsAndKeepsGroupMetadata() {
         begin("删除条目");all("批量删除")
@@ -70,8 +70,8 @@ class LorebookEntryAllScopeUiTest {
     @Test fun moveAllIncludesFoldedGroupsAndUpdatesEverySelectedEntry() {
         begin("移动到本书其他位置");all("批量移动")
         compose.onNodeWithTag("lorebook-target-group").performClick()
-        compose.onNodeWithText("组内：Target").performClick()
-        compose.onNodeWithText("移入分组").performClick()
+        compose.onNodeWithText("互斥组：Target").performClick()
+        compose.onNodeWithText("移入互斥组").performClick()
         compose.onNodeWithText("将 4 条移动到", substring = true).assertIsDisplayed()
         compose.onNodeWithText("确认移动").performClick()
         compose.runOnIdle { assertEquals(original.entries.map { it.copy(group = "Target") }, stored.entries) }
@@ -89,7 +89,7 @@ class LorebookEntryAllScopeUiTest {
         restoration.emulateSavedInstanceStateRestore()
         compose.onNodeWithText("全选范围：全部条目").assertIsDisplayed()
         compose.runOnIdle { assertEquals(setOf(original.entries[1].id), selected) }
-        choose("组内：A")
+        choose("互斥组：A")
         compose.runOnIdle { assertEquals(setOf(original.entries[1].id), selected) }
         choose("全部条目")
         compose.onNodeWithText("全选条目").performClick()

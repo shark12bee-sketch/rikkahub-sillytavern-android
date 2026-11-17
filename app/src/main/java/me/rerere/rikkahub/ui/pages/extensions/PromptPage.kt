@@ -280,7 +280,7 @@ private fun ModeInjectionTab(
     val editState = useEditState<PromptInjection.ModeInjection> { edited ->
         val index = modeInjections.indexOfFirst { it.id == edited.id }
         if (index >= 0) {
-            onUpdate(modeInjections.toMutableList().apply { set(index, if (edited.group.isNotBlank()) edited.copy(categoryId = null) else edited) })
+            onUpdate(modeInjections.toMutableList().apply { set(index, edited) })
         } else {
             onUpdate(modeInjections + edited)
         }
@@ -1448,7 +1448,7 @@ internal fun LorebookEditSheet(
     val entryEditState = useEditState<PromptInjection.RegexInjection> { edited ->
         val index = book.entries.indexOfFirst { it.id == edited.id }
         if (index >= 0) {
-            onEdit(book.withLorebookEntries(book.entries.toMutableList().apply { set(index, edited) }))
+            onEdit(book.withLorebookEntries(book.entries.toMutableList().apply { set(index, if (edited.group.isNotBlank()) edited.copy(categoryId = null) else edited) }))
         } else {
             pendingEntryJson = JsonInstant.encodeToString(edited)
         }

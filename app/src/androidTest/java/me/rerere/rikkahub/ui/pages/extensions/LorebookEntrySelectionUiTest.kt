@@ -22,7 +22,7 @@ class LorebookEntrySelectionUiTest {
 
     private fun scope(group: String) {
         compose.onNodeWithTag("lorebook-selection-scope").performClick()
-        compose.onNodeWithText("组内：${group.ifBlank { "未分组" }}").performClick()
+        compose.onNodeWithText("${if (group.isBlank()) "未分类条目" else "互斥组：$group"}").performClick()
     }
 
     @Test fun chosenScopeSurvivesSelectionChangesAndSavedStateRestoration() {
@@ -35,16 +35,16 @@ class LorebookEntrySelectionUiTest {
         }
         scope("B")
         compose.runOnIdle { selected = setOf(a.id) }
-        compose.onNodeWithText("全选范围：B").assertIsDisplayed()
+        compose.onNodeWithText("全选范围：互斥组 · B").assertIsDisplayed()
         restoration.emulateSavedInstanceStateRestore()
-        compose.onNodeWithText("全选范围：B").assertIsDisplayed()
+        compose.onNodeWithText("全选范围：互斥组 · B").assertIsDisplayed()
         compose.runOnIdle { assertEquals(setOf(a.id), selected) }
         scope("A")
         compose.runOnIdle { assertEquals(setOf(a.id), selected) }
         compose.onNodeWithText("全选该组").performClick()
         compose.runOnIdle { assertEquals(setOf(a.id, b.id), selected) }
         compose.runOnIdle { selected = emptySet() }
-        compose.onNodeWithText("全选范围：A").assertIsDisplayed()
+        compose.onNodeWithText("全选范围：互斥组 · A").assertIsDisplayed()
     }
 
     @Test fun selectionScopeAndMoveDestinationNeverOverwriteEachOtherOrManualSelection() {
@@ -58,15 +58,15 @@ class LorebookEntrySelectionUiTest {
         }
         scope("A")
         compose.onNodeWithTag("lorebook-target-group").performClick()
-        compose.onNodeWithText("组内：B").performClick()
-        compose.onNodeWithText("全选范围：A").assertIsDisplayed()
+        compose.onNodeWithText("互斥组：B").performClick()
+        compose.onNodeWithText("全选范围：互斥组 · A").assertIsDisplayed()
         compose.onNodeWithText("全选该组").performClick()
         compose.runOnIdle { assertEquals(setOf(a.id, b.id, c.id), selected) }
-        compose.onNodeWithText("移入分组").performClick()
+        compose.onNodeWithText("移入互斥组").performClick()
         compose.runOnIdle { assertEquals("B", destination) }
         scope("Empty")
         compose.onNodeWithText("全选该组").assertIsNotEnabled()
-        compose.onNodeWithText("目标：B").assertIsDisplayed()
+        compose.onNodeWithText("互斥组：B").assertIsDisplayed()
         compose.runOnIdle { assertEquals(setOf(a.id, b.id, c.id), selected) }
     }
 
@@ -83,7 +83,7 @@ class LorebookEntrySelectionUiTest {
         scope("B")
         for (next in LorebookBatchMode.entries) {
             compose.runOnIdle { mode = next }
-            compose.onNodeWithText("全选范围：B").assertIsDisplayed()
+            compose.onNodeWithText("全选范围：互斥组 · B").assertIsDisplayed()
             compose.onNodeWithText(when (next) { LorebookBatchMode.DELETE -> "删除所选"; LorebookBatchMode.SETTINGS -> "设置所选"; else -> "完成选择" })
                 .assertIsEnabled().performClick()
         }

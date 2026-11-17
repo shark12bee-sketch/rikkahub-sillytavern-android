@@ -52,7 +52,7 @@ class LorebookEntryGroupsUiTest {
 
     private fun chooseGroup(group: String) {
         compose.onNodeWithTag("lorebook-target-group").performClick()
-        compose.onNodeWithText("组内：${groupLabel(group)}").performClick()
+        compose.onNodeWithText("${if (group.isBlank()) "分类：未分类" else "互斥组：$group"}").performClick()
     }
 
     private fun move(handle: SemanticsNodeInteraction, target: SemanticsNodeInteraction, held: Boolean) {
@@ -95,7 +95,7 @@ class LorebookEntryGroupsUiTest {
         compose.onNodeWithText("管理互斥组").performClick()
         compose.onNodeWithTag("lorebook-group-name").performTextInput("Created")
         compose.onNodeWithText("创建互斥组").performClick()
-        compose.onNodeWithText("Created · 0 条").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("0 条 · 互斥组名称").performScrollTo().assertIsDisplayed()
         compose.onNodeWithText("完成互斥组管理").performClick()
         compose.onNodeWithTag("lorebook-entry-list").performScrollToNode(hasTestTag("lorebook-group:Created"))
         compose.onNodeWithTag("lorebook-group:Created").assertIsDisplayed()
@@ -144,14 +144,14 @@ class LorebookEntryGroupsUiTest {
         }
         select()
         chooseGroup("Empty")
-        compose.onNodeWithText("移入分组").performClick()
+        compose.onNodeWithText("移入互斥组").performClick()
         compose.onNodeWithText("将 2 条移动到「Empty」", substring = true).assertIsDisplayed()
         compose.onNodeWithText("取消移动").performClick()
         compose.runOnIdle { assertEquals(original, stored) }
-        compose.onNodeWithText("移入分组").performClick()
+        compose.onNodeWithText("移入互斥组").performClick()
         compose.onNodeWithText("确认移动").performClick()
         compose.runOnIdle {
-            assertEquals(listOf(beta, alpha.copy(group = "Empty"), anchor.copy(group = "Empty")), stored.entries)
+            assertEquals(listOf(alpha.copy(group = "Empty"), beta, anchor.copy(group = "Empty")), stored.entries)
             assertEquals(listOf("A", "B", "Empty"), stored.entryGroups)
         }
         compose.onNodeWithText("批量管理条目").performClick()
@@ -161,7 +161,7 @@ class LorebookEntryGroupsUiTest {
         compose.onNodeWithTag("lorebook-entry-list").performScrollToNode(hasContentDescription("选择条目 Alpha"))
         compose.onNodeWithContentDescription("选择条目 Alpha").performClick()
         chooseGroup("")
-        compose.onNodeWithText("移入分组").performClick()
+        compose.onNodeWithText("移至目标末尾").performClick()
         compose.onNodeWithText("确认移动").performClick()
         compose.runOnIdle { assertEquals(alpha.copy(group = ""), stored.entries.single { it.id == alpha.id }) }
     }
