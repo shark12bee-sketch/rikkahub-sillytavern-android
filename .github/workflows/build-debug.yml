@@ -98,7 +98,7 @@ jobs:
           profile: pixel_2
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
-          script: if [ -n "$UI_TEST_CLASS" ]; then set -- "-Pandroid.testInstrumentationRunnerArguments.class=$UI_TEST_CLASS"; elif [ "$SELECTION_REGRESSION" = true ]; then set -- "-Pandroid.testInstrumentationRunnerArguments.annotation=me.rerere.rikkahub.ui.pages.extensions.LorebookSelectionIntegration"; else set --; fi; ./gradlew :app:connectedDebugAndroidTest -Pandroid.injected.androidTest.leaveApksInstalledAfterRun=true -Pandroid.testInstrumentationRunnerArguments.package=me.rerere.rikkahub.ui.pages.extensions "$@" -x :web:buildWebUi --stacktrace; result=$?; captured=0; if [ -z "$UI_TEST_CLASS" ] && [ "$SELECTION_REGRESSION" != true ]; then for folder in round5-layout round6-layout; do adb pull "/sdcard/Android/data/me.rerere.rikkahub.huadeng.debug/files/$folder" "$folder" || captured=1; done; for folder in worldbook-editor-round7 worldbook-editor-round8; do adb pull "/sdcard/Android/data/me.rerere.rikkahub.huadeng.debug/files/$folder" "$folder" || captured=1; done; else adb pull /sdcard/Android/data/me.rerere.rikkahub.huadeng.debug/files/worldbook-editor-round8 worldbook-editor-round8 || captured=1; fi; if [ "$result" -ne 0 ]; then exit "$result"; fi; exit "$captured"
+          script: bash .github/scripts/run-lorebook-ui-tests.sh
       - name: Verify all editor UI test classes executed
         if: inputs.ui_test_class == '' && !inputs.selection_regression
         run: |
@@ -142,7 +142,7 @@ jobs:
           import xml.etree.ElementTree as ET
           import re
           selectors = os.environ['UI_TEST_CLASS'].split(',')
-          cases = [case for path in Path('app/build/outputs/androidTest-results').rglob('TEST-*.xml')
+          cases = [case for path in Path('focused-ui-results').rglob('TEST-*.xml')
                    for case in ET.parse(path).getroot().iter('testcase')]
           expected_total = 0
           for selector in selectors:
@@ -173,6 +173,7 @@ jobs:
             worldbook-editor-round8/
             app/build/outputs/androidTest-results/
             app/build/reports/androidTests/
+            focused-ui-results/
       - uses: actions/upload-artifact@v4
         if: matrix.kind == 'feature' && success() && !inputs.tests_only
         with:
