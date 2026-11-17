@@ -7,8 +7,12 @@ import kotlin.uuid.Uuid
 internal fun toggleLorebookScope(
     entries: List<PromptInjection.RegexInjection>,
     selected: Set<Uuid>,
-    group: String,
+    group: String?,
 ): Set<Uuid> {
-    val scoped = entries.filter { it.group.ifBlank { "" } == group.ifBlank { "" } }.map { it.id }.toSet()
+    val scoped = lorebookScopeIds(entries, group)
     return if (selected.containsAll(scoped)) selected - scoped else selected + scoped
 }
+
+/** Null is the all-entry scope, separate from every possible user-defined group name. */
+internal fun lorebookScopeIds(entries: List<PromptInjection.RegexInjection>, group: String?): Set<Uuid> =
+    entries.filter { group == null || it.group.ifBlank { "" } == group.ifBlank { "" } }.map { it.id }.toSet()

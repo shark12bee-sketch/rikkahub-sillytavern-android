@@ -136,13 +136,11 @@ internal fun LorebookSelectionControls(
     enabled: Boolean = true,
 ) {
     val actual = orderedLorebookSelection(entries, selected)
-    var selectionGroup by rememberSaveable { mutableStateOf("") }
-    val inGroup = entries.filter { it.group.ifBlank { "" } == selectionGroup }.map { it.id }.toSet()
+    var selectionGroup by rememberSaveable { mutableStateOf<String?>("") }
+    val inGroup = lorebookScopeIds(entries, selectionGroup)
     var destination by remember { mutableStateOf("") }
     Column {
         Text("${mode.label} · 已选 ${actual.size} 条", style = MaterialTheme.typography.labelLarge)
-        LorebookGroupTargetSelector(groups + entries.map { it.group }, selectionGroup, enabled,
-            prefix = "全选范围", tag = "lorebook-selection-scope") { selectionGroup = it }
         if (mode == LorebookBatchMode.COPY) {
             var showHelp by remember { mutableStateOf(false) }
             Box {
@@ -152,9 +150,12 @@ internal fun LorebookSelectionControls(
                 }
             }
         }
+        LorebookGroupTargetSelector(groups + entries.map { it.group }, selectionGroup.orEmpty(), enabled,
+            prefix = "全选范围", tag = "lorebook-selection-scope", allSelected = selectionGroup == null,
+            onSelectAll = { selectionGroup = null }) { selectionGroup = it }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             TextButton(onClick = { onSelect(toggleLorebookScope(entries, selected, selectionGroup)) }, enabled = enabled && inGroup.isNotEmpty()) {
-                Text(if (inGroup.isNotEmpty() && selected.containsAll(inGroup)) "取消全选" else "全选该组")
+                Text(if (inGroup.isNotEmpty() && selected.containsAll(inGroup)) "取消全选" else if (selectionGroup == null) "全选条目" else "全选该组")
             }
             TextButton(onClick = onCancel, enabled = enabled) { Text("取消批量操作") }
             TextButton(onClick = onDone, enabled = enabled && actual.isNotEmpty()) {
