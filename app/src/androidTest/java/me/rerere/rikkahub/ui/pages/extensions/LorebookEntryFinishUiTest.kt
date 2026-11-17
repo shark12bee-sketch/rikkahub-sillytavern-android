@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.SemanticsProperties
@@ -80,11 +81,11 @@ class LorebookEntryFinishUiTest {
         var show by mutableStateOf(true)
         compose.setContent { MaterialTheme { if (show) LorebookBulkSettingsDialog(listOf(a, b), { show = false }, { applied = it }) } }
         compose.onNodeWithText("应用设置").assertIsNotEnabled()
-        compose.onNodeWithText("优先级", substring = true).onParent().onChildAt(0).performClick()
+        compose.onAllNodes(isToggleable()).onFirst().performClick()
         compose.onNodeWithTag("bulk-priority").performTextReplacement("90")
         compose.onNodeWithText("应用设置").performClick()
         compose.runOnIdle { assertEquals(LorebookSettingsPatch(priority = 90), applied) }
-        captureLorebookRepairEvidence("finish-bulk-settings")
+        captureLorebookRepairEvidence("finish-bulk-settings", compose.onNode(isDialog()).captureToImage().asAndroidBitmap())
         compose.onNodeWithText("取消设置").performClick()
         compose.runOnIdle { assertFalse(show); assertEquals(1, a.injectDepth); assertEquals(3, b.injectDepth) }
     }
