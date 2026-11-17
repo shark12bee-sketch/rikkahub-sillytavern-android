@@ -7,6 +7,10 @@ on:
         description: 'Optional class#method for focused UI evidence; empty runs full regression'
         type: string
         default: ''
+      tests_only:
+        description: 'Skip standalone debug APK build and APK artifact upload'
+        type: boolean
+        default: false
       selection_regression:
         description: 'Run real-sheet selection integration only (units already verified)'
         type: boolean
@@ -76,7 +80,7 @@ jobs:
             --tests 'me.rerere.rikkahub.data.ai.transformers.PromptInjectionTransformerTest' \
             -x :web:buildWebUi --stacktrace 2>&1 | tee test.log
       - name: Build debug APK
-        if: matrix.kind == 'feature'
+        if: matrix.kind == 'feature' && !inputs.tests_only
         run: ./gradlew assembleDebug -x :web:buildWebUi --stacktrace
       - name: Enable KVM for Compose gesture verification
         run: |
@@ -134,13 +138,17 @@ jobs:
           import os
           from pathlib import Path
           import xml.etree.ElementTree as ET
-          selected_class, selected_method = os.environ['UI_TEST_CLASS'].split('#', 1)
+          selected_class, separator, selected_method = os.environ['UI_TEST_CLASS'].partition('#')
+          import re
+          source = Path('app/src/androidTest/java') / (selected_class.replace('.', '/') + '.kt')
+          expected_count = 1 if separator else len(re.findall(r'@Test\s+fun\s+', source.read_text()))
           cases = [case for path in Path('app/build/outputs/androidTest-results').rglob('TEST-*.xml')
                    for case in ET.parse(path).getroot().iter('testcase')]
-          assert len(cases) == 1, len(cases)
-          assert cases[0].get('classname') == selected_class
-          assert cases[0].get('name') == selected_method
-          assert all(cases[0].find(tag) is None for tag in ['failure', 'error', 'skipped'])
+          assert expected_count > 0 and len(cases) == expected_count, (len(cases), expected_count)
+          assert all(c.get('classname') == selected_class for c in cases)
+          if separator:
+              assert cases[0].get('name') == selected_method
+          assert all(c.find(tag) is None for c in cases for tag in ['failure', 'error', 'skipped'])
           print(selected_class, selected_method, 'passed')
           PY
       - uses: actions/upload-artifact@v4
@@ -160,7 +168,7 @@ jobs:
             app/build/outputs/androidTest-results/
             app/build/reports/androidTests/
       - uses: actions/upload-artifact@v4
-        if: matrix.kind == 'feature' && success()
+        if: matrix.kind == 'feature' && success() && !inputs.tests_only
         with:
           name: lorebook-entry-editor-debug
           path: app/build/outputs/apk/debug/*.apk
