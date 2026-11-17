@@ -50,4 +50,22 @@ class LorebookEntrySingleViewUiTest {
         compose.onNodeWithText("互斥成员").assertDoesNotExist()
         compose.onNodeWithText("普通成员").assertIsDisplayed()
     }
+
+    @Test fun groupAddKeepsItsExclusiveContext() {
+        show()
+        compose.onNodeWithContentDescription("在 竞争甲 中新增条目").performClick()
+        compose.runOnIdle { assertEquals("竞争甲", added); assertEquals(2, book.entries.size) }
+    }
+    @Test fun expansionAndSelectionSurviveScrollingThroughLargeBooks() {
+        book = book.copy(entries = book.entries + List(180) { PromptInjection.RegexInjection(name = "Long $it", group = "竞争甲") })
+        selecting = true; show()
+        compose.onNodeWithText("竞争甲").performClick()
+        compose.onNodeWithContentDescription("选择条目 互斥成员").performClick()
+        val list = compose.onNodeWithTag("lorebook-entry-list")
+        list.performScrollToNode(hasContentDescription("选择条目 Long 179"))
+        list.performScrollToNode(hasContentDescription("选择条目 互斥成员"))
+        compose.onNodeWithContentDescription("选择条目 互斥成员").assertIsOn()
+        compose.runOnIdle { assertEquals(setOf(member.id), selected) }
+        captureLorebookRepairEvidence("round14-expanded-group-survives-scroll")
+    }
 }

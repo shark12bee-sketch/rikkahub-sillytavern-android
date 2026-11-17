@@ -65,6 +65,7 @@ internal fun LorebookInsertionSafetyArea(
     idleHint: String = "安全区：拖动手柄选择同组位置；快捷插入首尾会立即保存",
     instructions: String = idleHint,
     headerActions: @Composable () -> Unit = {},
+    exclusiveTarget: Boolean = false,
     content: @Composable (handleModifier: Modifier, thumbnailHandle: @Composable (Uuid, () -> Unit) -> Modifier) -> Unit,
 ) {
     val handleModifier = lorebookInsertionHandle(state, enabled, longPressDrag, feedback,
@@ -121,8 +122,11 @@ internal fun LorebookInsertionSafetyArea(
                 }
             }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                TextButton(onClick = { onInsertAtEdge(false) }, enabled = enabled) { Text("插入最前") }
-                TextButton(onClick = { onInsertAtEdge(true) }, enabled = enabled) { Text("插入最后") }
+                if (exclusiveTarget) TextButton(onClick = { onInsertAtEdge(true) }, enabled = enabled) { Text("移入互斥组") }
+                else {
+                    TextButton(onClick = { onInsertAtEdge(false) }, enabled = enabled) { Text("插入最前") }
+                    TextButton(onClick = { onInsertAtEdge(true) }, enabled = enabled) { Text("插入最后") }
+                }
                 TextButton(onClick = onCancel, enabled = cancelEnabled && state.pointer == null) { Text("取消待插入") }
             }
         }

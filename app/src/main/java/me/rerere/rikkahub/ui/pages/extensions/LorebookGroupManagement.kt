@@ -39,6 +39,13 @@ internal fun LorebookGroupTargetSelector(groups: List<String>, selected: String,
 internal fun LorebookGroupManagement(book: Lorebook, onEdit: (Lorebook) -> Unit, onDismiss: () -> Unit) {
     var name by remember { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
+    var dissolving by remember { mutableStateOf<String?>(null) }
+    dissolving?.let { group ->
+        AlertDialog(onDismissRequest = { dissolving = null }, title = { Text("解散互斥组？") },
+            text = { Text("将解散「$group」的组关系，保留 ${book.entries.count { it.group == group }} 条条目及其独立设置，移入普通未分类区域。不会删除条目。") },
+            confirmButton = { TextButton(onClick = { onEdit(dissolveLorebookExclusiveGroup(book, group)); dissolving = null }) { Text("解散并保留条目") } },
+            dismissButton = { TextButton(onClick = { dissolving = null }) { Text("取消") } })
+    }
     AlertDialog(onDismissRequest = onDismiss, title = { Text("管理互斥组") }, text = {
         Column(Modifier.heightIn(max = 400.dp).verticalScroll(rememberScrollState())) {
             OutlinedTextField(name, { name = it; error = null }, modifier = Modifier.testTag("lorebook-group-name"), label = { Text("新互斥组名称") }, singleLine = true)
@@ -49,14 +56,18 @@ internal fun LorebookGroupManagement(book: Lorebook, onEdit: (Lorebook) -> Unit,
             error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
             val groups = lorebookEntryGroupNames(book)
             groups.forEachIndexed { index, group ->
-                Row(Modifier.fillMaxWidth()) {
+                Column(Modifier.fillMaxWidth()) {
+                    var renamed by remember(group) { mutableStateOf(group) }
                     val count = book.entries.count { it.group == group }
-                    Text("$group · $count 条", Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    TextButton(onClick = {
-                        val order = groups.toMutableList().apply { add(index - 1, removeAt(index)) }
-                        onEdit(book.copy(entryGroups = order))
-                    }, enabled = index > 0) { Text("上移") }
-                    if (count == 0) TextButton(onClick = { onEdit(book.copy(entryGroups = groups - group)) }) { Text("删除空组") }
+                    OutlinedTextField(renamed, { renamed = it }, label = { Text("$count 条 · 互斥组名称") }, singleLine = true)
+                    Row {
+                        TextButton(onClick = { runCatching { renameLorebookExclusiveGroup(book, group, renamed) }.onSuccess(onEdit).onFailure { error = it.message } }) { Text("重命名") }
+                        TextButton(onClick = {
+                            val order = groups.toMutableList().apply { add(index - 1, removeAt(index)) }
+                            onEdit(book.copy(entryGroups = order))
+                        }, enabled = index > 0) { Text("上移") }
+                        TextButton(onClick = { dissolving = group }) { Text(if (count == 0) "删除空组" else "解散组") }
+                    }
                 }
             }
             Text("互斥组保留原竞争规则。空组可保存；权重等设置请使用组设置。分类请使用独立的管理分类组入口。", style = MaterialTheme.typography.bodySmall)

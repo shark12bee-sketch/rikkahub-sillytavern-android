@@ -1,6 +1,12 @@
 package me.rerere.rikkahub.ui.pages.extensions
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.ui.Alignment
+import sh.calvin.reorderable.ReorderableItem
+import sh.calvin.reorderable.rememberReorderableLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
@@ -44,12 +50,12 @@ internal fun LorebookInsertionTargetSelector(book: Lorebook, selected: String, c
             }
         }
         DropdownMenu(expanded, { expanded = false }) {
-            DropdownMenuItem(text = { Text("分类（只修改整理归属）") }, onClick = {}, enabled = false)
+            DropdownMenuItem(text = { Text("普通条目（移出互斥组）") }, onClick = {}, enabled = false)
             DropdownMenuItem(text = { Text("分类：未分类") }, onClick = { expanded = false; onSelect("", true) })
             book.categories.forEach { category -> DropdownMenuItem(text = { Text("分类：${category.name}") },
                 onClick = { expanded = false; onSelect(category.id.toString(), true) }) }
             DropdownMenuItem(text = { Text("互斥组（修改竞争关系）") }, onClick = {}, enabled = false)
-            (lorebookEntryGroupNames(book) + "").forEach { group -> DropdownMenuItem(text = { Text("组内：${groupLabel(group)}") },
+            lorebookEntryGroupNames(book).forEach { group -> DropdownMenuItem(text = { Text("互斥组：${groupLabel(group)}") },
                 onClick = { expanded = false; onSelect(group, false) }) }
         }
     }
@@ -61,30 +67,80 @@ internal fun LorebookCategoryManagement(book: Lorebook, onEdit: (Lorebook) -> Un
     var error by remember { mutableStateOf<String?>(null) }
     var deleting by remember { mutableStateOf<Uuid?>(null) }
     deleting?.let { id ->
-        val count = book.entries.count { it.categoryId == id }
+        val count = book.entries.count { it.group.isBlank() && it.categoryId == id }
         AlertDialog(onDismissRequest = { deleting = null }, title = { Text("删除分类？") },
             text = { Text("分类中的 $count 条条目会留在原位置，变为未分类。条目及互斥组不会删除。") },
             confirmButton = { TextButton(onClick = { onEdit(deleteLorebookCategory(book, id)); deleting = null }) { Text("确认删除分类") } },
             dismissButton = { TextButton(onClick = { deleting = null }) { Text("取消") } })
     }
+    val nodes = book.orderedNodes()
+    val listState = rememberLazyListState()
+    val reorder = rememberReorderableLazyListState(listState) { from, to ->
+        val order = book.orderedNodes().toMutableList()
+        val source = order.indexOfFirst { it.toString() == from.key }
+        val target = order.indexOfFirst { it.toString() == to.key }
+        if (source >= 0 && target >= 0 && source != target) {
+            order.add(target, order.removeAt(source))
+            onEdit(book.copy(rootOrder = order))
+        }
+    }
     AlertDialog(onDismissRequest = onDismiss, title = { Text("管理分类组") }, text = {
-        Column(Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState())) {
+        Column(Modifier.heightIn(max = 480.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             OutlinedTextField(name, { name = it; error = null }, label = { Text("新分类名称") }, singleLine = true)
             TextButton(onClick = {
                 runCatching { createLorebookCategory(book, name) }.onSuccess { onEdit(it); name = "" }.onFailure { error = it.message }
             }) { Text("创建分类") }
             error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
-            book.categories.forEach { category ->
-                var edited by remember(category.id, category.name) { mutableStateOf(category.name) }
-                OutlinedTextField(edited, { edited = it }, label = { Text("${book.entries.count { it.categoryId == category.id }} 条") }, singleLine = true)
-                Row {
-                    TextButton(onClick = {
-                        runCatching { renameLorebookCategory(book, category.id, edited) }.onSuccess(onEdit).onFailure { error = it.message }
-                    }) { Text("重命名") }
-                    TextButton(onClick = { deleting = category.id }) { Text("删除分类") }
+            Text("分类组仅整理条目、支持折叠和排序，不改变触发条件，也不参与互斥竞争。", style = MaterialTheme.typography.bodySmall)
+            LazyColumn(Modifier.weight(1f, fill = false).testTag("lorebook-category-management-list"), state = listState,
+                verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                items(nodes, key = { it.toString() }) { node ->
+                    ReorderableItem(reorder, node.toString()) { dragging ->
+                        val category = book.categories.firstOrNull { it.id == node.categoryId }
+                        if (category == null) {
+                            Text("条目 · ${book.entries.firstOrNull { it.id == node.entryId }?.name.orEmpty()}",
+                                Modifier.fillMaxWidth().padding(8.dp), style = MaterialTheme.typography.bodySmall)
+                        } else Column(Modifier.fillMaxWidth().promptReorderLift(dragging)) {
+                            var edited by remember(category.id, category.name) { mutableStateOf(category.name) }
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                OutlinedTextField(edited, { edited = it }, modifier = Modifier.weight(1f),
+                                    label = { Text("${book.entries.count { it.group.isBlank() && it.categoryId == category.id }} 条") }, singleLine = true)
+                                LorebookDragHandle("排序分类 ${category.name}", Modifier.longPressDraggableHandle())
+                            }
+                            Row {
+                                TextButton(onClick = { onEdit(moveLorebookCategoryToEdge(book, category.id, false)) }) { Text("置顶") }
+                                TextButton(onClick = { onEdit(moveLorebookCategoryToEdge(book, category.id, true)) }) { Text("移至末尾") }
+                            }
+                            Row {
+                                TextButton(onClick = {
+                                    runCatching { renameLorebookCategory(book, category.id, edited) }.onSuccess(onEdit).onFailure { error = it.message }
+                                }) { Text("重命名") }
+                                TextButton(onClick = { deleting = category.id }) { Text("删除分类") }
+                            }
+                        }
+                    }
                 }
             }
-            Text("分类仅用于组织和排序。互斥组及触发设置独立保留。")
         }
     }, confirmButton = { TextButton(onClick = onDismiss) { Text("完成") } })
+}
+
+@Composable
+internal fun LorebookSelectionScopeSelector(book: Lorebook, scope: LorebookSelectionScope, enabled: Boolean, onSelect: (String) -> Unit) {
+    var expanded by remember { mutableStateOf(false) }
+    val label = when (scope) {
+        LorebookSelectionScope.All -> "全部条目"
+        LorebookSelectionScope.Unclassified -> "未分类条目"
+        is LorebookSelectionScope.Exclusive -> "互斥组 · ${scope.name}"
+        is LorebookSelectionScope.Category -> "分类组 · ${book.categories.firstOrNull { it.id == scope.id }?.name ?: "已删除分类"}"
+    }
+    Box {
+        TextButton(onClick = { expanded = true }, enabled = enabled, modifier = Modifier.testTag("lorebook-selection-scope")) { Text("全选范围：$label") }
+        DropdownMenu(expanded, { expanded = false }) {
+            DropdownMenuItem(text = { Text("全部条目") }, onClick = { expanded = false; onSelect("all:") })
+            DropdownMenuItem(text = { Text("未分类条目") }, onClick = { expanded = false; onSelect("ordinary:") })
+            lorebookEntryGroupNames(book).forEach { name -> DropdownMenuItem(text = { Text("互斥组：$name") }, onClick = { expanded = false; onSelect("exclusive:$name") }) }
+            book.categories.forEach { category -> DropdownMenuItem(text = { Text("分类组：${category.name}") }, onClick = { expanded = false; onSelect("category:${category.id}") }) }
+        }
+    }
 }

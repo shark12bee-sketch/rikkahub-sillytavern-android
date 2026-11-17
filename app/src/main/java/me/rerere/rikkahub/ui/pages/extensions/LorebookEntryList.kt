@@ -40,6 +40,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.boundsInRoot
@@ -98,8 +99,6 @@ internal fun LorebookEntryList(
     var listBounds by remember { mutableStateOf<LorebookDragBounds?>(null) }
     val currentGroup by rememberUpdatedState(if (pendingEntry?.group?.isNotBlank() == true) "exclusive:${pendingEntry.group}" else pendingEntry?.categoryId?.toString().orEmpty())
     val currentVisible by rememberUpdatedState(visibleEntries)
-    val groupNames = book.categories.map { it.id.toString() }
-    val currentGroups by rememberUpdatedState(groupNames + "")
     var targetGroup by rememberSaveable(book.id.toString(), pendingEntry?.id?.toString(), batch?.id?.toString()) {
         mutableStateOf(if (pendingEntry?.group?.isNotBlank() == true) pendingEntry.group else pendingEntry?.categoryId?.toString().orEmpty())
     }
@@ -176,7 +175,10 @@ internal fun LorebookEntryList(
         items(entries, key = { it.id.toString() }) { entry ->
                         var cardCoordinates by remember { mutableStateOf<LayoutCoordinates?>(null) }
                         DisposableEffect(entry.id) { onDispose { measuredTargets.remove(entry.id.toString()) } }
-                        Box(Modifier.animateItem().padding(start = if (group.isNotBlank()) 12.dp else 0.dp).onGloballyPositioned { coordinates ->
+                        val membershipColor = if (group.startsWith("exclusive:")) MaterialTheme.colorScheme.tertiary.copy(alpha = 0.35f) else MaterialTheme.colorScheme.primary.copy(alpha = 0.25f)
+                        Box(Modifier.animateItem().drawBehind {
+                            if (group.isNotBlank()) drawLine(membershipColor, Offset(2.dp.toPx(), 0f), Offset(2.dp.toPx(), size.height), 2.dp.toPx())
+                        }.padding(start = if (group.isNotBlank()) 12.dp else 0.dp).onGloballyPositioned { coordinates ->
                             cardCoordinates = coordinates
                             val top = coordinates.localToRoot(Offset.Zero).y
                             measuredTargets[entry.id.toString()] = LorebookDropTarget(entry.id, group, top, top + coordinates.size.height)
@@ -247,7 +249,7 @@ internal fun LorebookEntryList(
                     feedback = { feedback },
                     modifier = Modifier.heightIn(max = safetyHeightLimit).testTag("lorebook-insertion-safety-area"),
                     title = if (batch != null) "${batch.mode.label} · 已选 ${batch.entries.size} 条"
-                        else "待插入 · ${book.categories.firstOrNull { it.id == pendingEntry?.categoryId }?.name ?: "未分类"}",
+                        else "待插入 · ${pendingEntry?.group?.takeIf { it.isNotBlank() } ?: book.categories.firstOrNull { it.id == pendingEntry?.categoryId }?.name ?: "未分类"}",
                     onConfirm = { revealDestination(it); if (batch != null) onCommitBatch(it, null) else onInsertPending(it) },
                     onConfirmSingle = { id, placement -> revealDestination(placement); onCommitSingle(id, placement) },
                     longPressDrag = batch != null,
@@ -261,6 +263,7 @@ internal fun LorebookEntryList(
                         LorebookInsertionTargetSelector(book, targetGroup, targetIsCategory,
                             batchEnabled && insertion.pointer == null) { selected, category -> targetGroup = selected; targetIsCategory = category }
                     },
+                    exclusiveTarget = !targetIsCategory && targetGroup.isNotBlank(),
                     onCancel = onCancelPending,
                     onInsertAtEdge = { end ->
                         val placement = LorebookEntryPlacement.groupEdge(targetGroup, end).copy(categoryTarget = targetIsCategory)
@@ -274,7 +277,8 @@ internal fun LorebookEntryList(
                         handleModifier = handleModifier,
                         onEdit = { onEditEntry(pendingEntry) },
                         onUpdate = onUpdatePending,
-                        onCancel = onCancelPending,
+                        exclusiveTarget = !targetIsCategory && targetGroup.isNotBlank(),
+                    onCancel = onCancelPending,
                     )
                 }
             }

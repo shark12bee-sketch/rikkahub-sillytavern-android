@@ -23,27 +23,17 @@ fun Lorebook.orderedOrdinaryEntries(): List<PromptInjection.RegexInjection> {
     }.distinctBy { it.id }
 }
 
-/** Rebuild order after an entry insertion, keeping explicitly saved empty groups in their slots. */
+/** Keep organization metadata separate from storage/Prompt ordering and retain empty roots. */
 fun Lorebook.withOrderedEntries(values: List<PromptInjection.RegexInjection>): Lorebook {
-    val updated = values.map { if (it.group.isNotBlank() && it.categoryId != null) it.copy(categoryId = null) else it }
-    val groups = categories.map { it.id }
+    val updated = values // Existing hidden category metadata is not a reason to overwrite unrelated settings.
     val exclusiveGroups = (entryGroups + entries.map { it.group } + updated.map { it.group }).filter { it.isNotBlank() }.distinct()
-    if (entries.map { it.id to it.categoryId } == updated.map { it.id to it.categoryId })
-        return copy(entries = updated, entryGroups = exclusiveGroups)
-    // Deletion/settings preserve the saved root order even when storage entry order differs.
+    val value = copy(entries = updated, entryGroups = exclusiveGroups)
     val ids = updated.map { it.id }.toSet()
-    if (updated.all { e -> entries.any { it.id == e.id && it.categoryId == e.categoryId } } &&
-        entries.filter { it.id in ids }.map { it.id } == updated.map { it.id }) {
-        val value = copy(entries = updated, entryGroups = exclusiveGroups)
-        return value.copy(rootOrder = value.orderedNodes())
-    }
-    val nodes = updated.filter { it.group.isBlank() }.map { if (it.categoryId !in groups) LorebookOrderNode(entryId = it.id) else LorebookOrderNode(categoryId = it.categoryId) }.distinct().toMutableList()
-    orderedNodes().forEachIndexed { index, node ->
-        if (node.categoryId in groups && updated.none { it.group.isBlank() && it.categoryId == node.categoryId }) nodes.add(index.coerceAtMost(nodes.size), node)
-    }
-    return copy(entries = updated, entryGroups = exclusiveGroups, rootOrder = nodes.distinct())
+    val categories = categories.map { it.id }.toSet()
+    // Hidden exclusive entry roots retain a recoverable ordinary position; they are never displayed.
+    val retained = (if (rootOrder.isEmpty()) orderedNodes() else rootOrder).filter { (it.entryId != null && it.entryId in ids) || (it.categoryId != null && it.categoryId in categories) }
+    return value.copy(rootOrder = (retained + value.orderedNodes()).distinct())
 }
-
 
 /** Native import creates independent identities in both ID spaces, including root references. */
 fun Lorebook.withFreshIds(): Lorebook {

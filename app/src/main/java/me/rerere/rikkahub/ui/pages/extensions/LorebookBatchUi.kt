@@ -134,11 +134,21 @@ internal fun LorebookSelectionControls(
     groups: List<String> = emptyList(),
     onMoveToGroup: ((String) -> Unit)? = null,
     enabled: Boolean = true,
+    book: me.rerere.rikkahub.data.model.Lorebook? = null,
+    onMoveToPlacement: ((LorebookEntryPlacement) -> Unit)? = null,
 ) {
     val actual = orderedLorebookSelection(entries, selected)
-    var selectionGroup by rememberSaveable { mutableStateOf<String?>("") }
-    val inGroup = lorebookScopeIds(entries, selectionGroup)
+    val source = book ?: me.rerere.rikkahub.data.model.Lorebook(entries = entries, entryGroups = groups)
+    var scopeKey by rememberSaveable(book?.id?.toString()) { mutableStateOf("ordinary:") }
+    val selectionScope = when {
+        scopeKey == "all:" -> LorebookSelectionScope.All
+        scopeKey.startsWith("exclusive:") -> LorebookSelectionScope.Exclusive(scopeKey.removePrefix("exclusive:"))
+        scopeKey.startsWith("category:") -> LorebookSelectionScope.Category(Uuid.parse(scopeKey.removePrefix("category:")))
+        else -> LorebookSelectionScope.Unclassified
+    }
+    val inGroup = lorebookScopeIds(entries, selectionScope)
     var destination by remember { mutableStateOf("") }
+    var categoryDestination by remember { mutableStateOf(true) }
     Column {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Text("${mode.label} · 已选 ${actual.size} 条", style = MaterialTheme.typography.labelLarge)
@@ -152,21 +162,22 @@ internal fun LorebookSelectionControls(
             }
         }
         }
-        LorebookGroupTargetSelector(groups + entries.map { it.group }, selectionGroup.orEmpty(), enabled,
-            prefix = "全选范围", tag = "lorebook-selection-scope", allSelected = selectionGroup == null,
-            onSelectAll = { selectionGroup = null }) { selectionGroup = it }
+        LorebookSelectionScopeSelector(source, selectionScope, enabled) { scopeKey = it }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            TextButton(onClick = { onSelect(toggleLorebookScope(entries, selected, selectionGroup)) }, enabled = enabled && inGroup.isNotEmpty()) {
-                Text(if (inGroup.isNotEmpty() && selected.containsAll(inGroup)) "取消全选" else if (selectionGroup == null) "全选条目" else "全选该组")
+            TextButton(onClick = { onSelect(toggleLorebookScope(entries, selected, selectionScope)) }, enabled = enabled && inGroup.isNotEmpty()) {
+                Text(if (inGroup.isNotEmpty() && selected.containsAll(inGroup)) "取消全选" else if (selectionScope == LorebookSelectionScope.All) "全选条目" else "全选该组")
             }
             TextButton(onClick = onCancel, enabled = enabled) { Text("取消批量操作") }
             TextButton(onClick = onDone, enabled = enabled && actual.isNotEmpty()) {
                 Text(when (mode) { LorebookBatchMode.DELETE -> "删除所选"; LorebookBatchMode.SETTINGS -> "设置所选"; else -> "完成选择" })
             }
         }
-        if (mode == LorebookBatchMode.MOVE && onMoveToGroup != null) Row {
-            LorebookGroupTargetSelector(groups, destination, enabled, prefix = "目标") { destination = it }
-            TextButton(onClick = { onMoveToGroup(destination) }, enabled = enabled && actual.isNotEmpty()) { Text("移入分组") }
+        if (mode == LorebookBatchMode.MOVE && (onMoveToGroup != null || onMoveToPlacement != null)) Row(verticalAlignment = Alignment.CenterVertically) {
+            LorebookInsertionTargetSelector(source, destination, categoryDestination, enabled) { value, category -> destination = value; categoryDestination = category }
+            TextButton(onClick = {
+                val placement = LorebookEntryPlacement.groupEdge(destination, true).copy(categoryTarget = categoryDestination)
+                if (onMoveToPlacement != null) onMoveToPlacement(placement) else onMoveToGroup?.invoke(destination)
+            }, enabled = enabled && actual.isNotEmpty()) { Text(if (categoryDestination) "移至目标末尾" else "移入互斥组") }
         }
     }
 }
@@ -211,7 +222,7 @@ internal fun lorebookCopyConfirmation(request: LorebookBatchRequest): String {
             target != null -> "条目「${target.name.ifBlank { "未命名" }}」${if (placement.after) "之后" else "之前"}"
             else -> "分类「$category」${if (placement.after) "末尾" else "最前"}"
         }
-        return "将 ${task.entries.size} 条复制到「${request.draft.name.ifBlank { "未命名世界书" }}」的$position。\n目标分类：$category。互斥组、权重与触发配置原样保留。来源书不变；副本生成新条目 ID，不引用来源分类 ID。确认后保存当前目标草稿。"
+        return "将 ${task.entries.size} 条复制到「${request.draft.name.ifBlank { "未命名世界书" }}」的$position。\n目标分类：$category。副本移出来源互斥组；权重与其他触发配置保留。来源书不变；副本生成新条目 ID，不引用来源分类 ID。确认后保存当前目标草稿。"
     }
     val group = request.placement?.group ?: task.entries.first().group
     val existingGroups = (request.draft.entryGroups + request.draft.entries.flatMap { entry ->

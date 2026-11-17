@@ -280,7 +280,7 @@ private fun ModeInjectionTab(
     val editState = useEditState<PromptInjection.ModeInjection> { edited ->
         val index = modeInjections.indexOfFirst { it.id == edited.id }
         if (index >= 0) {
-            onUpdate(modeInjections.toMutableList().apply { set(index, edited) })
+            onUpdate(modeInjections.toMutableList().apply { set(index, if (edited.group.isNotBlank()) edited.copy(categoryId = null) else edited) })
         } else {
             onUpdate(modeInjections + edited)
         }
@@ -1559,17 +1559,12 @@ internal fun LorebookEditSheet(
                 onCancel = ::cancelBatch,
                 groups = lorebookEntryGroupNames(book),
                 enabled = !savingBatch && !copyBusy,
-                onMoveToGroup = { group ->
-                    val ids = selectedStrings.map { Uuid.parse(it) }.toSet()
-                    if (ids.isNotEmpty()) groupMoveConfirmation = LorebookBatchRequest(book, baseline,
-                        LorebookBatchAction.Move(ids), LorebookEntryPlacement.groupEdge(group, true))
+                book = book,
+                onMoveToPlacement = { placement ->
+                    if (selectedIds.isNotEmpty()) groupMoveConfirmation = LorebookBatchRequest(book, baseline,
+                        LorebookBatchAction.Move(selectedIds), placement)
                 },
             )
-            if (selecting && selectionMode == LorebookBatchMode.MOVE.name) LorebookCategorySelector(
-                book, null, !savingBatch && !copyBusy && selectedIds.isNotEmpty(), label = "归入分类（保留互斥组）") { category ->
-                if (selectedIds.isNotEmpty()) groupMoveConfirmation = LorebookBatchRequest(book, baseline,
-                    LorebookBatchAction.Move(selectedIds), LorebookEntryPlacement.groupEdge(category?.toString().orEmpty(), true).copy(categoryTarget = true))
-            }
             if (savingBatch) Text("正在保存，请稍候…", style = MaterialTheme.typography.bodySmall)
             batchError?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
 
@@ -1610,7 +1605,7 @@ internal fun LorebookEditSheet(
                 },
                 onInsertPending = { placement ->
                     pendingEntry?.let { pending ->
-                        val entries = insertLorebookEntry(book.orderedEntries(), pending, placement)
+                        val entries = insertLorebookEntry(book.entries, pending, placement)
                         if (entries.any { it.id == pending.id }) {
                             val inserted = book.withPlacedEntries(entries, setOf(pending.id), placement)
                             onEdit(inserted)
@@ -1701,7 +1696,7 @@ internal fun LorebookEditSheet(
     groupMoveConfirmation?.let { request ->
         val count = (request.action as LorebookBatchAction.Move).ids.size
         AlertDialog(onDismissRequest = { groupMoveConfirmation = null }, title = { Text("确认移入分组") },
-            text = { Text("将 $count 条移动到「${if (request.placement?.categoryTarget == true) book.categories.firstOrNull { it.id.toString() == request.placement.group }?.name ?: "未分类" else groupLabel(request.placement?.group.orEmpty())}」末尾。仅修改所选类型的归属和顺序，互斥配置与分类归属独立处理。") },
+            text = { Text("将 $count 条移动到「${if (request.placement?.categoryTarget == true) book.categories.firstOrNull { it.id.toString() == request.placement.group }?.name ?: "未分类" else groupLabel(request.placement?.group.orEmpty())}」末尾。将更新所选条目的归属；移入普通分类或未分类会解除互斥归属，移入互斥组会移出普通区。其他触发配置与条目 ID 保留。") },
             confirmButton = { TextButton(onClick = { groupMoveConfirmation = null; executeBatch(request) }) { Text("确认移动") } },
             dismissButton = { TextButton(onClick = { groupMoveConfirmation = null }) { Text("取消移动") } })
     }
@@ -2057,7 +2052,7 @@ internal fun LorebookGroupSection(
                     Icon(HugeIcons.Tools, null, modifier = Modifier.size(16.dp))
                 }
                 IconButton(onClick = onAddEntry, enabled = canAddEntry, modifier = Modifier.size(28.dp)) {
-                    Icon(HugeIcons.Add01, null, modifier = Modifier.size(16.dp))
+                    Icon(HugeIcons.Add01, "在 $groupName 中新增条目", modifier = Modifier.size(16.dp))
                 }
             }
         }

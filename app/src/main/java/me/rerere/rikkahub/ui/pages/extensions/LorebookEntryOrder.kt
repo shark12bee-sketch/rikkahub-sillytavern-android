@@ -11,6 +11,8 @@ internal fun moveLorebookEntry(
 ): List<PromptInjection.RegexInjection> {
     val entry = entries.firstOrNull { it.id == fromId } ?: return entries
     if (placement.targetId == fromId) return entries
+    if (!placement.categoryTarget && !placement.group.isNullOrBlank() && placement.targetId == null)
+        return entries.map { if (it.id == fromId) it.copy(group = placement.group, categoryId = null) else it }
     val destination = if (placement.group == entry.group.ifBlank { "" }) placement.copy(group = entry.group) else placement
     return runCatching { insertLorebookBatch(entries.filterNot { it.id == fromId }, listOf(entry), destination, null) }
         .getOrDefault(entries)

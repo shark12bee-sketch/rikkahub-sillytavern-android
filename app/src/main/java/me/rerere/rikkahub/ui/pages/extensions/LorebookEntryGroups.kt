@@ -27,3 +27,17 @@ internal fun moveLorebookGroup(book: Lorebook, source: String, target: String, a
     remaining.add(remaining.indexOf(target) + if (after) 1 else 0, source)
     return book.copy(entryGroups = remaining)
 }
+
+/** Rename membership only; never use one member as a template for the others. */
+internal fun renameLorebookExclusiveGroup(book: Lorebook, old: String, name: String): Lorebook {
+    val clean = name.trim()
+    require(clean.isNotEmpty() && (clean == old || clean !in lorebookEntryGroupNames(book))) { "名称为空或已存在" }
+    return book.copy(entryGroups = lorebookEntryGroupNames(book).map { if (it == old) clean else it },
+        entries = book.entries.map { if (it.group == old) it.copy(group = clean) else it })
+}
+
+/** Dissolving a relationship is not deleting the entities or their competitive configuration. */
+internal fun dissolveLorebookExclusiveGroup(book: Lorebook, group: String): Lorebook {
+    val released = book.withOrderedEntries(book.entries.map { if (it.group == group) it.copy(group = "", categoryId = null) else it })
+    return released.copy(entryGroups = lorebookEntryGroupNames(book) - group)
+}

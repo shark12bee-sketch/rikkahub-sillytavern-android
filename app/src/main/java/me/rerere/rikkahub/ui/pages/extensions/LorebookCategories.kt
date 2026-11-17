@@ -60,27 +60,23 @@ internal fun insertCategoryEntries(remaining: List<PromptInjection.RegexInjectio
     return remaining.take(index) + inserted + remaining.drop(index)
 }
 
-/** Explicit root boundaries also work beside empty categories, without an entry-index surrogate. */
+/** Apply a stable-ID ordinary root placement without deriving it from Prompt storage order. */
 internal fun Lorebook.withPlacedEntries(entries: List<PromptInjection.RegexInjection>, ids: Set<Uuid>, placement: LorebookEntryPlacement?): Lorebook {
     val updated = withOrderedEntries(entries)
     if (placement?.categoryTarget != true) return updated
     val destination = placement.group?.takeIf { it.isNotBlank() }?.let { Uuid.parse(it) }
     require(destination == null || categories.any { it.id == destination }) { "目标分类已不存在" }
-    val anchor = placement.rootGroup?.let { Uuid.parse(it) } ?: destination ?: return updated
-    val moved = if (destination == null) entries.filter { it.id in ids }.map { LorebookOrderNode(entryId = it.id) } else emptyList()
-    // Keep a newly populated empty category at its saved root slot.
-    val old = orderedNodes()
+    if (destination != null) return updated // Internal order is the entry storage subsequence.
+    val moved = entries.filter { it.id in ids }.map { LorebookOrderNode(entryId = it.id) }
     val order = updated.orderedNodes().filterNot { it in moved }.toMutableList()
-    if (destination != null && this.entries.none { it.categoryId == destination }) {
-        val node = LorebookOrderNode(categoryId = destination)
-        order.remove(node)
-        val oldIndex = old.indexOf(node)
-        val next = old.drop(oldIndex + 1).firstOrNull { it in order }
-        order.add(if (next == null) order.size else order.indexOf(next), node)
+    val targetEntry = entries.firstOrNull { it.id == placement.targetId }
+    val anchor = placement.rootGroup?.let { LorebookOrderNode(categoryId = Uuid.parse(it)) }
+        ?: targetEntry?.let { if (it.categoryId != null) LorebookOrderNode(categoryId = it.categoryId) else LorebookOrderNode(entryId = it.id) }
+    val at = if (anchor == null) { if (placement.after) order.size else 0 } else {
+        require(anchor in order) { "目标位置已改变" }
+        order.indexOf(anchor) + if (placement.after) 1 else 0
     }
-    val at = order.indexOf(LorebookOrderNode(categoryId = anchor))
-    require(at >= 0) { "目标分类已不存在" }
-    order.addAll(at + if (placement.after) 1 else 0, moved)
+    order.addAll(at, moved)
     return updated.copy(rootOrder = order)
 }
 

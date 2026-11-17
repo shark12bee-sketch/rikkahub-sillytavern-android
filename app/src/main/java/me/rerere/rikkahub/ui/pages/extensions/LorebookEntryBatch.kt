@@ -88,9 +88,10 @@ internal fun applyLorebookBatch(books: List<Lorebook>, request: LorebookBatchReq
         is LorebookBatchAction.Move -> {
             val selected = orderedLorebookSelection(request.draft.orderedEntries(), action.ids)
             require(selected.size == action.ids.size) { "选中的条目已删除，请取消并重新选择" }
-            insertLorebookBatch(
-                request.draft.entries.filterNot { it.id in action.ids }, selected, request.placement, request.atEnd,
-            )
+            val placement = request.placement
+            if (placement != null && !placement.categoryTarget && !placement.group.isNullOrBlank() && placement.targetId == null)
+                request.draft.entries.map { if (it.id in action.ids) it.copy(group = placement.group, categoryId = null) else it }
+            else insertLorebookBatch(request.draft.entries.filterNot { it.id in action.ids }, selected, placement, request.atEnd)
         }
         is LorebookBatchAction.Copy -> {
             require(action.task.sourceBookId != request.draft.id) { "请选择另一份世界书作为复制目标" }
