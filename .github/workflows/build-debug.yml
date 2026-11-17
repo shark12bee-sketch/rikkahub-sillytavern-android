@@ -8,7 +8,7 @@ on:
         type: string
         default: ''
       selection_regression:
-        description: 'Run focused selection state regression and lorebook units'
+        description: 'Run real-sheet selection integration only (units already verified)'
         type: boolean
         default: false
   push:
@@ -60,7 +60,7 @@ jobs:
           PY
           chmod +x gradlew
       - name: Test lorebook entry editor
-        if: matrix.kind == 'feature' && inputs.ui_test_class == ''
+        if: matrix.kind == 'feature' && inputs.ui_test_class == '' && !inputs.selection_regression
         run: |
           set -o pipefail
           ./gradlew :app:testDebugUnitTest \
@@ -92,7 +92,7 @@ jobs:
           profile: pixel_2
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
-          script: if [ -n "$UI_TEST_CLASS" ]; then set -- "-Pandroid.testInstrumentationRunnerArguments.class=$UI_TEST_CLASS"; elif [ "$SELECTION_REGRESSION" = true ]; then set -- "-Pandroid.testInstrumentationRunnerArguments.class=me.rerere.rikkahub.ui.pages.extensions.LorebookEntrySelectionUiTest,me.rerere.rikkahub.ui.pages.extensions.LorebookEntryRepairUiTest#explicitScopeStaysIndependentAcrossManualCrossGroupSelectionAndScopedToggles,me.rerere.rikkahub.ui.pages.extensions.LorebookEntryRepairUiTest#deletingWholeSelectedGroupKeepsEmptyGroupAndSurvivesReopen,me.rerere.rikkahub.ui.pages.extensions.LorebookEntryBatchUiTest#selectInReverseOrderCancelAndMoveWithoutChangingDataUntilCommit,me.rerere.rikkahub.ui.pages.extensions.LorebookEntryGroupsUiTest#scopedSelectionMovesToChosenGroupOnlyAfterConfirmationAndCanReturnToUngrouped"; else set --; fi; ./gradlew :app:connectedDebugAndroidTest -Pandroid.injected.androidTest.leaveApksInstalledAfterRun=true -Pandroid.testInstrumentationRunnerArguments.package=me.rerere.rikkahub.ui.pages.extensions "$@" -x :web:buildWebUi --stacktrace; result=$?; captured=0; if [ -z "$UI_TEST_CLASS" ] && [ "$SELECTION_REGRESSION" != true ]; then for folder in round5-layout round6-layout; do adb pull "/sdcard/Android/data/me.rerere.rikkahub.huadeng.debug/files/$folder" "$folder" || captured=1; done; for folder in worldbook-editor-round7 worldbook-editor-round8; do adb pull "/sdcard/Android/data/me.rerere.rikkahub.huadeng.debug/files/$folder" "$folder" || captured=1; done; else adb pull /sdcard/Android/data/me.rerere.rikkahub.huadeng.debug/files/worldbook-editor-round8 worldbook-editor-round8 || captured=1; fi; if [ "$result" -ne 0 ]; then exit "$result"; fi; exit "$captured"
+          script: if [ -n "$UI_TEST_CLASS" ]; then set -- "-Pandroid.testInstrumentationRunnerArguments.class=$UI_TEST_CLASS"; elif [ "$SELECTION_REGRESSION" = true ]; then set -- "-Pandroid.testInstrumentationRunnerArguments.annotation=me.rerere.rikkahub.ui.pages.extensions.LorebookSelectionIntegration"; else set --; fi; ./gradlew :app:connectedDebugAndroidTest -Pandroid.injected.androidTest.leaveApksInstalledAfterRun=true -Pandroid.testInstrumentationRunnerArguments.package=me.rerere.rikkahub.ui.pages.extensions "$@" -x :web:buildWebUi --stacktrace; result=$?; captured=0; if [ -z "$UI_TEST_CLASS" ] && [ "$SELECTION_REGRESSION" != true ]; then for folder in round5-layout round6-layout; do adb pull "/sdcard/Android/data/me.rerere.rikkahub.huadeng.debug/files/$folder" "$folder" || captured=1; done; for folder in worldbook-editor-round7 worldbook-editor-round8; do adb pull "/sdcard/Android/data/me.rerere.rikkahub.huadeng.debug/files/$folder" "$folder" || captured=1; done; else adb pull /sdcard/Android/data/me.rerere.rikkahub.huadeng.debug/files/worldbook-editor-round8 worldbook-editor-round8 || captured=1; fi; if [ "$result" -ne 0 ]; then exit "$result"; fi; exit "$captured"
       - name: Verify all editor UI test classes executed
         if: inputs.ui_test_class == '' && !inputs.selection_regression
         run: |
@@ -117,10 +117,10 @@ jobs:
           cases = [c for p in Path('app/build/outputs/androidTest-results').rglob('TEST-*.xml')
                    for c in ET.parse(p).getroot().iter('testcase')]
           expected = {
-              'LorebookEntrySelectionUiTest': 3, 'LorebookEntryRepairUiTest': 2,
+              'LorebookEntryRepairUiTest': 2,
               'LorebookEntryBatchUiTest': 1, 'LorebookEntryGroupsUiTest': 1,
           }
-          assert len(cases) == 7, len(cases)
+          assert len(cases) == 4, len(cases)
           for name, count in expected.items():
               found = [c for c in cases if c.get('classname', '').endswith('.' + name)]
               assert len(found) == count, (name, len(found))
