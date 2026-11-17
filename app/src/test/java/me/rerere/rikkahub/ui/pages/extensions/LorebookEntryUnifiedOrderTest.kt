@@ -84,4 +84,54 @@ class LorebookEntryUnifiedOrderTest {
         assertEquals(expected, deleted.orderedEntries())
         assertTrue(deleted.categories.any { it.name == "Empty" })
     }
+    @Test fun completeMessageJsonRoundTripContainsAllThirteenMarkersOnceInOrder() {
+        val book = fixture().let { it.copy(rootOrder = listOf(LorebookOrderNode(entryId = it.entries.last().id)) + it.orderedNodes()) }
+        val result = transformMessages(listOf(UIMessage.user("hello")), Assistant(lorebookIds = setOf(book.id)), emptyList(), listOf(book))
+        val json = JsonInstant.encodeToString(result)
+        val reopened = JsonInstant.decodeFromString<List<UIMessage>>(json)
+        assertEquals(result.map { it.role to it.parts }, reopened.map { it.role to it.parts })
+        val output = reopened.flatMap { it.parts }.filterIsInstance<UIMessagePart.Text>().joinToString("\n") { it.text }
+        val offsets = book.orderedEntries().map { entry ->
+            assertEquals(1, Regex(Regex.escape(entry.content)).findAll(json).count())
+            output.indexOf(entry.content)
+        }
+        assertEquals(offsets.sorted(), offsets)
+    }
+    @Test fun movedCategoryPromptSerializesInTheNewOrder() {
+        val book = fixture()
+        val moved = moveLorebookCategory(book, book.categories[0].id, LorebookEntryPlacement(book.entries.last().id, true, "", categoryTarget = true))
+        val reopened = JsonInstant.decodeFromString<Lorebook>(JsonInstant.encodeToString(moved))
+        val output = text(reopened)
+        assertEquals(reopened.orderedEntries().map { it.content }, Regex("\\[\\[MARK_\\d+\\]\\]").findAll(output).map { it.value }.toList())
+    }
+    @Test fun crossBookCopyAssignsOnlyTargetCategoryAndFreshEntryIdentity() {
+        val source = fixture(); val category = LorebookCategory(name = "Target")
+        val target = Lorebook(categories = listOf(category))
+        val task = LorebookCopyTask(kotlin.uuid.Uuid.random(), source.id, source.entries.take(2))
+        val p = LorebookEntryPlacement.groupEdge(category.id.toString(), true).copy(categoryTarget = true)
+        val result = applyLorebookBatch(listOf(source, target), LorebookBatchRequest(target, target, LorebookBatchAction.Copy(task), p))
+        assertEquals(source, result.first())
+        val copies = result.last().entries
+        assertEquals(2, copies.size)
+        assertTrue(copies.all { it.categoryId == category.id && source.entries.none { e -> e.id == it.id } })
+        assertEquals(source.entries.take(2), copies.mapIndexed { index, e -> e.copy(id = source.entries[index].id, categoryId = source.entries[index].categoryId) })
+    }
+    @Test fun unknownTargetCategoryFailsWithoutModifyingEitherBook() {
+        val source = fixture(); val target = Lorebook()
+        val before = listOf(source, target)
+        val task = LorebookCopyTask(kotlin.uuid.Uuid.random(), source.id, source.entries.take(1))
+        val p = LorebookEntryPlacement.groupEdge(kotlin.uuid.Uuid.random().toString(), true).copy(categoryTarget = true)
+        assertTrue(runCatching { applyLorebookBatch(before, LorebookBatchRequest(target, target, LorebookBatchAction.Copy(task), p)) }.isFailure)
+        assertEquals(listOf(source, target), before)
+    }
+    @Test fun emptyCategoryRetainsItsRootSlotAfterSingleInsertion() {
+        val book = fixture().let { it.copy(rootOrder = listOf(LorebookOrderNode(categoryId = it.categories.last().id)) + it.orderedNodes()) }
+        val entry = PromptInjection.RegexInjection(content = "new", group = "exclusive", groupWeight = 17)
+        val p = LorebookEntryPlacement.groupEdge(book.categories.last().id.toString(), true).copy(categoryTarget = true)
+        val inserted = insertLorebookEntry(book.orderedEntries(), entry, p)
+        val updated = book.withPlacedEntries(inserted, setOf(entry.id), p)
+        assertEquals(book.orderedNodes().first(), updated.orderedNodes().first())
+        assertEquals(entry.copy(categoryId = book.categories.last().id), updated.entries.single { it.id == entry.id })
+    }
+
 }

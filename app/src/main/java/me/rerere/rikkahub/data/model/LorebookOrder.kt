@@ -19,20 +19,21 @@ fun Lorebook.orderedEntries(): List<PromptInjection.RegexInjection> {
 /** Rebuild order after an entry insertion, keeping explicitly saved empty groups in their slots. */
 fun Lorebook.withOrderedEntries(updated: List<PromptInjection.RegexInjection>): Lorebook {
     val groups = categories.map { it.id }
+    val exclusiveGroups = (entryGroups + entries.map { it.group } + updated.map { it.group }).filter { it.isNotBlank() }.distinct()
     if (entries.map { it.id to it.categoryId } == updated.map { it.id to it.categoryId })
-        return copy(entries = updated, entryGroups = (entryGroups + updated.map { it.group }).filter { it.isNotBlank() }.distinct())
+        return copy(entries = updated, entryGroups = exclusiveGroups)
     // Deletion/settings preserve the saved root order even when storage entry order differs.
     val ids = updated.map { it.id }.toSet()
     if (updated.all { e -> entries.any { it.id == e.id && it.categoryId == e.categoryId } } &&
         entries.filter { it.id in ids }.map { it.id } == updated.map { it.id }) {
-        val value = copy(entries = updated)
+        val value = copy(entries = updated, entryGroups = exclusiveGroups)
         return value.copy(rootOrder = value.orderedNodes())
     }
     val nodes = updated.map { if (it.categoryId !in groups) LorebookOrderNode(entryId = it.id) else LorebookOrderNode(categoryId = it.categoryId) }.distinct().toMutableList()
     orderedNodes().forEachIndexed { index, node ->
         if (node.categoryId in groups && updated.none { it.categoryId == node.categoryId }) nodes.add(index.coerceAtMost(nodes.size), node)
     }
-    return copy(entries = updated, entryGroups = (entryGroups + updated.map { it.group }).filter { it.isNotBlank() }.distinct(), rootOrder = nodes.distinct())
+    return copy(entries = updated, entryGroups = exclusiveGroups, rootOrder = nodes.distinct())
 }
 
 

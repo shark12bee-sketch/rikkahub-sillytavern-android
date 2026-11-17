@@ -73,12 +73,14 @@ jobs:
           cp -r app/build/test-results/testDebugUnitTest editor-test-results
       - name: Compare existing prompt injection tests
         if: inputs.ui_test_class == '' && !inputs.selection_regression
-        continue-on-error: true
         run: |
           set -o pipefail
           ./gradlew :app:testDebugUnitTest \
             --tests 'me.rerere.rikkahub.data.ai.transformers.PromptInjectionTransformerTest' \
             -x :web:buildWebUi --stacktrace 2>&1 | tee test.log
+      - name: Test complete message serialization
+        if: inputs.ui_test_class == '' && !inputs.selection_regression
+        run: ./gradlew :ai:testDebugUnitTest --tests 'me.rerere.ai.ui.UIMessageSerializationTest' -x :web:buildWebUi --stacktrace
       - name: Build debug APK
         if: matrix.kind == 'feature' && !inputs.tests_only
         run: ./gradlew assembleDebug -x :web:buildWebUi --stacktrace
@@ -156,6 +158,7 @@ jobs:
         with:
           name: lorebook-entry-editor-test-results-${{ matrix.kind }}
           path: |
+            ai/build/test-results/testDebugUnitTest/
             app/build/test-results/testDebugUnitTest/
             app/build/reports/tests/testDebugUnitTest/
             test.log
