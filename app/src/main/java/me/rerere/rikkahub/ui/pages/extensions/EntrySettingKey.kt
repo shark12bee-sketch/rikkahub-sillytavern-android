@@ -50,9 +50,9 @@ internal enum class EntrySettingKey(val label: String) {
         DEPTH -> entry.copy(injectDepth = value as Int)
         EXCLUDE_RECURSION -> entry.copy(excludeRecursion = value as Boolean)
         PREVENT_RECURSION -> entry.copy(preventRecursion = value as Boolean)
-        DELAY_RECURSION -> entry.copy(delayUntilRecursion = (value as Int).also { require(it >= 0) })
+        DELAY_RECURSION -> entry.copy(delayUntilRecursion = value as Int)
         USE_PROBABILITY -> entry.copy(useProbability = value as Boolean)
-        PROBABILITY -> entry.copy(probability = (value as Int).also { require(it in 0..100) })
+        PROBABILITY -> entry.copy(probability = value as Int)
         STICKY -> entry.copy(sticky = value as Int)
         COOLDOWN -> entry.copy(cooldown = value as Int)
         DELAY -> entry.copy(delay = value as Int)
@@ -62,5 +62,12 @@ internal enum class EntrySettingKey(val label: String) {
         GROUP_SCORING -> entry.copy(useGroupScoring = value as Boolean)
         IGNORE_BUDGET -> entry.copy(ignoreBudget = value as Boolean)
         ROLE -> entry.copy(role = value as MessageRole)
+    }
+
+    // 读取旧配置不校验未选字段；只校验本次明确参与应用的新值。
+    fun accepts(value: Any?): Boolean = when (this) {
+        PROBABILITY -> value is Int && value in 0..100
+        DELAY_RECURSION -> value is Int && value >= 0
+        else -> true
     }
 }

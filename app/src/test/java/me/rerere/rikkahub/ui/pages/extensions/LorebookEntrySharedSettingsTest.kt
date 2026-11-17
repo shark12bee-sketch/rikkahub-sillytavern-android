@@ -58,4 +58,22 @@ class LorebookEntrySharedSettingsTest {
             assertEquals(a, unchanged)
         }
     }
+    @Test fun untouchedLegacyValuesDoNotBlockOtherFieldsButSelectedValuesAreValidated() {
+        val legacy = a.copy(probability = 150, delayUntilRecursion = -1)
+        val state = LorebookBulkEditState(List(3) { legacy.copy(id = Uuid.random()) })
+        state.change(EntrySettingKey.PRIORITY, 90);state.select(EntrySettingKey.PRIORITY, true)
+        assertTrue(state.canApply)
+        assertEquals(legacy.copy(priority = 90), state.patch().apply(legacy))
+        state.select(EntrySettingKey.PROBABILITY, true)
+        assertFalse(state.canApply)
+        state.change(EntrySettingKey.PROBABILITY, 70)
+        assertTrue(state.canApply)
+        state.select(EntrySettingKey.DELAY_RECURSION, true)
+        assertFalse(state.canApply)
+        state.change(EntrySettingKey.DELAY_RECURSION, 2)
+        assertEquals(legacy.copy(priority = 90, probability = 70, delayUntilRecursion = 2), state.patch().apply(legacy))
+        for ((key, invalid) in listOf(EntrySettingKey.PROBABILITY to 150, EntrySettingKey.DELAY_RECURSION to -1)) {
+            assertTrue(runCatching { LorebookSettingsPatch(overrides = mapOf(key to invalid)).apply(a) }.isFailure)
+        }
+    }
 }

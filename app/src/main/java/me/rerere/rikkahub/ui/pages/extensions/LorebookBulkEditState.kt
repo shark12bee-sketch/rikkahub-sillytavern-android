@@ -24,7 +24,8 @@ internal class LorebookBulkEditState(val entries: List<PromptInjection.RegexInje
         resolved = resolved + key
     }
     fun confirmValue(key: EntrySettingKey) { resolved = resolved + key }
-    val canApply get() = selected.isNotEmpty() && resolved.containsAll(selected)
+    val canApply get() = selected.isNotEmpty() && resolved.containsAll(selected) &&
+        selected.all { it.accepts(it.read(draft)) }
     fun patch(): LorebookSettingsPatch {
         check(canApply) { "请为选中的混合字段明确指定新值" }
         val remaining = selected - setOf(EntrySettingKey.ENABLED, EntrySettingKey.PRIORITY, EntrySettingKey.POSITION, EntrySettingKey.DEPTH, EntrySettingKey.PROBABILITY)

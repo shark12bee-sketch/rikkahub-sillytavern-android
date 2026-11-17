@@ -40,6 +40,7 @@ internal fun EntrySettingRegion(key: EntrySettingKey, entry: PromptInjection.Reg
                 if (key in bulk.mixed) TextButton(onClick = { bulk.confirmValue(key) }) { Text("明确使用此新值") }
             }
             if (checked && key !in bulk.resolved) Text("请明确设置新值后再应用", color = MaterialTheme.colorScheme.error)
+            if (checked && !key.accepts(key.read(bulk.draft))) Text("请设置有效值后再应用", color = MaterialTheme.colorScheme.error)
         }
     }
 }

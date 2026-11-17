@@ -21,6 +21,9 @@ internal data class LorebookSettingsPatch(
         val base = entry.copy(priority = priority ?: entry.priority, position = position ?: entry.position,
             injectDepth = depth ?: entry.injectDepth, probability = probability ?: entry.probability,
             enabled = enabled ?: entry.enabled)
-        return overrides.entries.fold(base) { current, (key, value) -> key.write(current, value) }
+        return overrides.entries.fold(base) { current, (key, value) ->
+            require(key.accepts(value)) { "${key.label}的值无效" }
+            key.write(current, value)
+        }
     }
 }
