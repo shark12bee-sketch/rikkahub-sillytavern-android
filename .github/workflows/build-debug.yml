@@ -140,18 +140,21 @@ jobs:
           import os
           from pathlib import Path
           import xml.etree.ElementTree as ET
-          selected_class, separator, selected_method = os.environ['UI_TEST_CLASS'].partition('#')
           import re
-          source = Path('app/src/androidTest/java') / (selected_class.replace('.', '/') + '.kt')
-          expected_count = 1 if separator else len(re.findall(r'@Test\s+fun\s+', source.read_text()))
+          selectors = os.environ['UI_TEST_CLASS'].split(',')
           cases = [case for path in Path('app/build/outputs/androidTest-results').rglob('TEST-*.xml')
                    for case in ET.parse(path).getroot().iter('testcase')]
-          assert expected_count > 0 and len(cases) == expected_count, (len(cases), expected_count)
-          assert all(c.get('classname') == selected_class for c in cases)
-          if separator:
-              assert cases[0].get('name') == selected_method
-          assert all(c.find(tag) is None for c in cases for tag in ['failure', 'error', 'skipped'])
-          print(selected_class, selected_method, 'passed')
+          expected_total = 0
+          for selector in selectors:
+              selected_class, separator, selected_method = selector.partition('#')
+              source = Path('app/src/androidTest/java') / (selected_class.replace('.', '/') + '.kt')
+              expected = 1 if separator else len(re.findall(r'@Test\s+fun\s+', source.read_text()))
+              found = [c for c in cases if c.get('classname') == selected_class and (not separator or c.get('name') == selected_method)]
+              assert expected > 0 and len(found) == expected, (selector, len(found), expected)
+              assert all(c.find(tag) is None for c in found for tag in ['failure', 'error', 'skipped']), selector
+              expected_total += expected
+              print(selector, expected, 'passed')
+          assert len(cases) == expected_total, (len(cases), expected_total)
           PY
       - uses: actions/upload-artifact@v4
         if: always()

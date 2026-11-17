@@ -22,6 +22,7 @@ internal fun LorebookExclusiveGroups(book: Lorebook, onEdit: (Lorebook) -> Unit,
     onEditEntry: (PromptInjection.RegexInjection) -> Unit, onAddEntry: (String) -> Unit,
     onGroupSettings: (String, List<PromptInjection.RegexInjection>) -> Unit, onManage: () -> Unit,
     insertion: LorebookInsertionState, feedback: () -> LorebookDragFeedback,
+    allowReorder: Boolean = true, hiddenIds: Set<kotlin.uuid.Uuid> = emptySet(),
     onMeasure: (String, LorebookDropTarget?) -> Unit) {
     var expanded by remember(book.id) { mutableStateOf(emptySet<String>()) }
     var showInfo by remember { mutableStateOf(false) }
@@ -38,7 +39,7 @@ internal fun LorebookExclusiveGroups(book: Lorebook, onEdit: (Lorebook) -> Unit,
             TextButton(onClick = onManage) { Text("管理互斥组") }
         }
         lorebookEntryGroupNames(book).forEachIndexed { index, group ->
-            val entries = book.entries.filter { it.group == group }
+            val entries = book.entries.filter { it.group == group && it.id !in hiddenIds }
             val key = "exclusive:$group"
             var coordinates by remember { mutableStateOf<LayoutCoordinates?>(null) }
             DisposableEffect(key) { onDispose { onMeasure(key, null) } }
@@ -48,9 +49,9 @@ internal fun LorebookExclusiveGroups(book: Lorebook, onEdit: (Lorebook) -> Unit,
                 onMeasure(key, LorebookDropTarget(null, key, top, top + c.size.height))
             }) {
             LorebookGroupSection(group, entries, { onGroupSettings(group, entries) }, { onAddEntry(group) },
-                canEditGroup = entries.isNotEmpty(), groupIndex = index, expanded = group in expanded,
+                canAddEntry = allowReorder, canEditGroup = allowReorder && entries.isNotEmpty(), groupIndex = index, expanded = group in expanded,
                 onExpandedChange = { expanded = if (group in expanded) expanded - group else expanded + group },
-                headerGesture = lorebookInsertionHandle(insertion, true, true, feedback,
+                headerGesture = if (!allowReorder) null else lorebookInsertionHandle(insertion, true, true, feedback,
                     onConfirm = { _, placement -> placement.group?.removePrefix("exclusive:")?.let { onEdit(moveLorebookGroup(book, group, it, placement.after)) } },
                     onTap = { expanded = if (group in expanded) expanded - group else expanded + group },
                     source = LorebookDragSource.GROUP, groupName = key,
@@ -66,5 +67,14 @@ internal fun LorebookExclusiveGroups(book: Lorebook, onEdit: (Lorebook) -> Unit,
                     onUpdate = { value -> onEdit(book.withLorebookEntries(book.entries.map { if (it.id == value.id) value else it })) })
             }
         }
+        if (lorebookEntryGroupNames(book).isNotEmpty()) {
+            DisposableEffect(book.id) { onDispose { onMeasure("exclusive:", null) } }
+            Text("拖到此处移出互斥组", style = MaterialTheme.typography.labelSmall,
+                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp).testTag("lorebook-group:").onGloballyPositioned { c ->
+                    val top = c.localToRoot(Offset.Zero).y
+                    onMeasure("exclusive:", LorebookDropTarget(null, "exclusive:", top, top + c.size.height))
+                })
+        }
+
     }
 }

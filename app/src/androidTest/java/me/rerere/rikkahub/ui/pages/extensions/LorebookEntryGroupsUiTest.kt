@@ -91,12 +91,12 @@ class LorebookEntryGroupsUiTest {
 
     @Test fun createEmptyGroupWithoutEntryAndSaveItInTheBook() {
         showSheet()
-        compose.onNodeWithTag("lorebook-entry-list").performScrollToNode(hasText("管理分组"))
-        compose.onNodeWithText("管理分组").performClick()
+        compose.onNodeWithTag("lorebook-entry-list").performScrollToNode(hasText("管理互斥组"))
+        compose.onNodeWithText("管理互斥组").performClick()
         compose.onNodeWithTag("lorebook-group-name").performTextInput("Created")
-        compose.onNodeWithText("创建分组").performClick()
+        compose.onNodeWithText("创建互斥组").performClick()
         compose.onNodeWithText("Created · 0 条").performScrollTo().assertIsDisplayed()
-        compose.onNodeWithText("完成分组管理").performClick()
+        compose.onNodeWithText("完成互斥组管理").performClick()
         compose.onNodeWithTag("lorebook-entry-list").performScrollToNode(hasTestTag("lorebook-group:Created"))
         compose.onNodeWithTag("lorebook-group:Created").assertIsDisplayed()
         captureLorebookEditorEvidence("groups-created-empty")
@@ -181,8 +181,9 @@ class LorebookEntryGroupsUiTest {
                     header = {}, onEntriesChange = {}, onEditEntry = {}, onAddEntry = {}, onGroupSettings = { _, _ -> })
             }
         }
-        compose.onNode(hasText("A") and hasClickAction()).performClick()
-        move(compose.onNodeWithTag("lorebook-thumbnail-${beta.id}"), compose.onNodeWithContentDescription("拖动排序 Anchor"), true)
+        // Root entries are classification targets. Choose the explicit upper exclusive header
+        // when the purpose of this test is to change competition membership.
+        move(compose.onNodeWithTag("lorebook-thumbnail-${beta.id}"), compose.onNodeWithTag("lorebook-group:A"), true)
         compose.runOnIdle { assertEquals(listOf(alpha), batch?.entries); assertEquals(beta.copy(group = "A"), draft.entries.single { it.id == beta.id }) }
         compose.onNodeWithTag("lorebook-entry-list").performScrollToNode(hasTestTag("lorebook-group:Empty"))
         move(compose.onNodeWithContentDescription("长按拖动 1 条"), compose.onNodeWithTag("lorebook-group:Empty"), true)

@@ -86,11 +86,9 @@ class LorebookEntryRepairUiTest {
         fun scope(group: String) = compose.onNodeWithText("全选范围：$group").assertIsDisplayed()
         fun count(n: Int) = compose.onNodeWithText("批量移动 · 已选 $n 条").assertIsDisplayed()
         scope("未分组")
-        expand("A")
         select("Alpha")
         select("Beta")
         scope("未分组"); count(2)
-        expand("B")
         select("Anchor")
         scope("未分组"); count(3)
         select("Beta")
@@ -127,7 +125,6 @@ class LorebookEntryRepairUiTest {
     @Test fun partialDeleteRequiresConfirmationAndCancelLeavesEveryEntryUntouched() {
         showSheet()
         begin("删除条目")
-        expand("A")
         select("Alpha")
         compose.onNodeWithText("删除所选").performClick()
         compose.onNodeWithText("将删除 1 条", substring = true).assertIsDisplayed()
@@ -172,7 +169,6 @@ class LorebookEntryRepairUiTest {
         draft = before
         stored = before
         showSheet()
-        expand("A")
         // Scroll the destination into view too: a visible source alone does not compose later rows.
         compose.onNodeWithTag("lorebook-entry-list").performScrollToNode(hasTestTag("lorebook-group:B"))
         compose.onNodeWithContentDescription("拖动排序 Alpha").assertIsDisplayed()
@@ -200,7 +196,6 @@ class LorebookEntryRepairUiTest {
                     onEditEntry = {}, onAddEntry = {}, onGroupSettings = { _, _ -> })
             }
         }
-        expand("A")
         val handle = compose.onNodeWithContentDescription("拖动排序 Alpha")
         dragTo(handle, compose.onNodeWithTag("lorebook-group:B"), cancel = true)
         compose.runOnIdle { assertEquals(original, draft); assertEquals(0, writes) }

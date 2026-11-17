@@ -6,6 +6,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import me.rerere.rikkahub.data.model.*
 import kotlin.uuid.Uuid
@@ -23,6 +24,33 @@ internal fun LorebookCategorySelector(book: Lorebook, selected: Uuid?, enabled: 
             book.categories.forEach { category ->
                 DropdownMenuItem(text = { Text(category.name) }, onClick = { expanded = false; onSelect(category.id) })
             }
+        }
+    }
+}
+
+/** One compact menu keeps old competitive destinations and new categories explicitly distinct. */
+@Composable
+internal fun LorebookInsertionTargetSelector(book: Lorebook, selected: String, categoryTarget: Boolean,
+    enabled: Boolean, onSelect: (String, Boolean) -> Unit) {
+    var expanded by remember { mutableStateOf(false) }
+    Box {
+        CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides 32.dp) {
+            TextButton(onClick = { expanded = true }, enabled = enabled,
+                modifier = Modifier.height(32.dp).widthIn(max = 128.dp).testTag("lorebook-target-group"),
+                contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp)) {
+                val label = if (categoryTarget) "分类：${book.categories.firstOrNull { it.id.toString() == selected }?.name ?: "未分类"}"
+                    else "互斥组：${groupLabel(selected)}"
+                Text(label, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, style = MaterialTheme.typography.labelSmall)
+            }
+        }
+        DropdownMenu(expanded, { expanded = false }) {
+            DropdownMenuItem(text = { Text("分类（只修改整理归属）") }, onClick = {}, enabled = false)
+            DropdownMenuItem(text = { Text("分类：未分类") }, onClick = { expanded = false; onSelect("", true) })
+            book.categories.forEach { category -> DropdownMenuItem(text = { Text("分类：${category.name}") },
+                onClick = { expanded = false; onSelect(category.id.toString(), true) }) }
+            DropdownMenuItem(text = { Text("互斥组（修改竞争关系）") }, onClick = {}, enabled = false)
+            (lorebookEntryGroupNames(book) + "").forEach { group -> DropdownMenuItem(text = { Text("组内：${groupLabel(group)}") },
+                onClick = { expanded = false; onSelect(group, false) }) }
         }
     }
 }

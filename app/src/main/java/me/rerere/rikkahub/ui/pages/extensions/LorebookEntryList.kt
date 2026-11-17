@@ -101,6 +101,7 @@ internal fun LorebookEntryList(
     var targetGroup by rememberSaveable(book.id.toString(), pendingEntry?.id?.toString(), batch?.id?.toString()) {
         mutableStateOf(pendingEntry?.categoryId?.toString().orEmpty())
     }
+    var targetIsCategory by rememberSaveable(book.id.toString(), pendingEntry?.id?.toString(), batch?.id?.toString()) { mutableStateOf(true) }
     LaunchedEffect(pendingEntry?.categoryId) { if (pendingEntry != null) targetGroup = pendingEntry.categoryId?.toString().orEmpty() }
     fun revealDestination(placement: LorebookEntryPlacement) {
         placement.group?.let { group -> expandedGroups = (expandedGroups + group).distinct() }
@@ -114,7 +115,7 @@ internal fun LorebookEntryList(
         derivedStateOf {
             val entries = currentVisible.associateBy { it.id.toString() }
             val exclusiveGroupDrag = insertion.drag?.groupName?.startsWith("exclusive:") == true
-            val exclusiveEntryDrag = insertion.drag?.source == LorebookDragSource.LIST && insertion.pointer?.let { point ->
+            val exclusiveEntryDrag = (insertion.drag?.source == LorebookDragSource.LIST || insertion.drag?.source == LorebookDragSource.SHELF) && insertion.pointer?.let { point ->
                 measuredTargets.any { (key, target) -> key.startsWith("exclusive:") && point.y >= target.top && point.y < target.bottom }
             } == true
             val exclusiveDrag = exclusiveGroupDrag || exclusiveEntryDrag
@@ -191,12 +192,12 @@ internal fun LorebookEntryList(
                         else "安全区：拖动手柄选择条目或分类落点；快捷插入首尾会立即保存",
                     instructions = (batchHint?.let { "$it\n" }.orEmpty()) + lorebookInsertionInstructions(batch?.mode),
                     headerActions = {
-                        LorebookCategorySelector(book, (feedback.placement?.group ?: targetGroup).takeIf { it.isNotBlank() }?.let { Uuid.parse(it) },
-                            batchEnabled && insertion.pointer == null) { targetGroup = it?.toString().orEmpty() }
+                        LorebookInsertionTargetSelector(book, targetGroup, targetIsCategory,
+                            batchEnabled && insertion.pointer == null) { selected, category -> targetGroup = selected; targetIsCategory = category }
                     },
                     onCancel = onCancelPending,
                     onInsertAtEdge = { end ->
-                        val placement = LorebookEntryPlacement.groupEdge(targetGroup, end).copy(categoryTarget = true)
+                        val placement = LorebookEntryPlacement.groupEdge(targetGroup, end).copy(categoryTarget = targetIsCategory)
                         revealDestination(placement)
                         if (batch != null) onCommitBatch(placement, null) else onInsertPending(placement)
                     },
@@ -222,9 +223,9 @@ internal fun LorebookEntryList(
                 if (!taskActive) item(key = "book-fields") {
                     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) { header() }
                 }
-                if (!taskActive) item(key = "exclusive-groups") {
+                item(key = "exclusive-groups") {
                     LorebookExclusiveGroups(book, ::updateBook, onEditEntry, onAddEntry, onGroupSettings, onManageGroups,
-                        insertion, { feedback }) { key, target -> if (target == null) measuredTargets.remove(key) else measuredTargets[key] = target }
+                        insertion, { feedback }, allowReorder = !taskActive, hiddenIds = movingIds) { key, target -> if (target == null) measuredTargets.remove(key) else measuredTargets[key] = target }
                 }
                 item(key = "entry-controls") {
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {

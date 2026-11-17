@@ -12,7 +12,14 @@ import org.junit.Test
 
 class LorebookEntryAllScopeUiTest {
     @get:Rule val compose = createComposeRule()
-    private val original = Lorebook(entries = listOf("A", "B", "", "全部条目").map { PromptInjection.RegexInjection(name = "Entry $it", group = it, content = "body $it") }, entryGroups = listOf("A", "B", "全部条目", "Target"))
+    // Folding is now a category property; exclusive group membership remains independently present.
+    private val categories = listOf("A", "B", "全部条目").map { LorebookCategory(name = "Folder $it") }
+    private val initialEntries = listOf("A", "B", "", "全部条目").map { name ->
+        PromptInjection.RegexInjection(name = "Entry $name", group = name, content = "body $name",
+            categoryId = if (name.isBlank()) null else categories.first { it.name == "Folder $name" }.id)
+    }
+    private val original = Lorebook(entries = initialEntries, entryGroups = listOf("A", "B", "全部条目", "Target"),
+        categories = categories, rootOrder = initialEntries.map { e -> e.categoryId?.let { LorebookOrderNode(categoryId = it) } ?: LorebookOrderNode(entryId = e.id) })
     private var draft by mutableStateOf(original)
     private var stored by mutableStateOf(original)
     private var staged = emptyList<PromptInjection.RegexInjection>()
