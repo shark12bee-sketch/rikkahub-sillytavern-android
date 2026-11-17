@@ -105,4 +105,24 @@ class LorebookEntrySingleViewUiTest {
         compose.onNodeWithText("确认删除条目").performClick()
         compose.runOnIdle { assertEquals(listOf(plain), book.entries); assertTrue("竞争甲" in book.entryGroups) }
     }
+
+    @Test fun pendingTargetFollowsExplicitlyEditedMembershipWithoutChangingIdentity() {
+        var pending by mutableStateOf(member.copy(id = Uuid.random(), categoryId = null))
+        var placement: LorebookEntryPlacement? = null
+        compose.setContent { MaterialTheme {
+            LorebookEntryList(book, pending, {}, { placement = it }, { pending = it }, Modifier.size(400.dp, 700.dp),
+                header = {}, onEntriesChange = {}, onEditEntry = {}, onAddEntry = {}, onGroupSettings = { _, _ -> })
+        } }
+        compose.onNodeWithText("互斥组：竞争甲").assertIsDisplayed()
+        val id = pending.id
+        compose.runOnIdle { pending = pending.copy(group = "", categoryId = category.id) }
+        compose.onNodeWithText("分类：分类甲").assertIsDisplayed()
+        compose.onNodeWithText("插入最后").performClick()
+        compose.runOnIdle {
+            assertEquals(id, pending.id)
+            assertEquals(category.id.toString(), placement?.group)
+            assertEquals(true, placement?.categoryTarget)
+            assertEquals(2, book.entries.size)
+        }
+    }
 }

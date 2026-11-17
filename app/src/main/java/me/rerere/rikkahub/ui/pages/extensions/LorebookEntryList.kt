@@ -104,7 +104,7 @@ internal fun LorebookEntryList(
         mutableStateOf(if (pendingEntry?.group?.isNotBlank() == true) pendingEntry.group else pendingEntry?.categoryId?.toString().orEmpty())
     }
     var targetIsCategory by rememberSaveable(book.id.toString(), pendingEntry?.id?.toString(), batch?.id?.toString()) { mutableStateOf(pendingEntry?.group.isNullOrBlank()) }
-    LaunchedEffect(pendingEntry?.id) { if (pendingEntry != null) { targetIsCategory = pendingEntry.group.isBlank(); targetGroup = if (targetIsCategory) pendingEntry.categoryId?.toString().orEmpty() else pendingEntry.group } }
+    LaunchedEffect(pendingEntry?.id, pendingEntry?.group, pendingEntry?.categoryId) { if (pendingEntry != null) { targetIsCategory = pendingEntry.group.isBlank(); targetGroup = if (targetIsCategory) pendingEntry.categoryId?.toString().orEmpty() else pendingEntry.group } }
     fun revealDestination(placement: LorebookEntryPlacement) {
         placement.group?.let { group -> if (placement.categoryTarget) expandedGroups = (expandedGroups + group).distinct() else expandedExclusive = (expandedExclusive + group).distinct() }
     }
