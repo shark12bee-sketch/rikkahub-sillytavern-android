@@ -36,7 +36,7 @@ class LorebookEntryUnifiedOrderTest {
         assertEquals(8, book.entries.count { output.contains(it.content) })
         assertEquals(1, book.entries.take(6).count { output.contains(it.content) })
     }
-    @Test fun mixedRootOrderIsThePromptOrderAndPersists() {
+    @Test fun mixedRootOrderPersistsWithoutOverridingPromptRules() {
         val book = fixture(); val singles = book.entries.drop(7)
         val order = listOf(LorebookOrderNode(entryId = singles[0].id), LorebookOrderNode(categoryId = book.categories[0].id),
             LorebookOrderNode(entryId = singles[1].id), LorebookOrderNode(categoryId = book.categories[2].id),
@@ -44,8 +44,7 @@ class LorebookEntryUnifiedOrderTest {
         val mixed = book.copy(rootOrder = order)
         val reopened = JsonInstant.decodeFromString<Lorebook>(JsonInstant.encodeToString(mixed))
         assertEquals(order, reopened.orderedNodes())
-        val output = text(reopened); val offsets = reopened.orderedEntries().map { output.indexOf(it.content) }
-        assertEquals(offsets.sorted(), offsets)
+        assertEquals(text(book), text(reopened)) // Organization is not an injection-order override.
     }
     @Test fun wholeCategoryMovesBetweenSinglesWithoutChangingChildren() {
         val book = fixture(); val target = book.entries.last()
@@ -70,13 +69,13 @@ class LorebookEntryUnifiedOrderTest {
         assertTrue(book.categories.isEmpty()); assertNull(book.entries.single().categoryId)
         assertEquals(book.entries, book.orderedEntries())
     }
-    @Test fun categoryAssignmentAndRemovalLeaveCompetitionFieldsUntouched() {
+    @Test fun explicitReleaseToCategoryChangesMembershipButPreservesTriggerSettings() {
         val book = fixture(); val source = book.entries.last().copy(group = "old", inclusionGroup = "other", groupWeight = 17)
         val placement = LorebookEntryPlacement.groupEdge(book.categories[0].id.toString(), true).copy(categoryTarget = true)
         val moved = insertCategoryEntries(book.entries.dropLast(1), listOf(source), placement, null).single { it.id == source.id }
-        assertEquals(source.copy(categoryId = book.categories[0].id), moved)
+        assertEquals(source.copy(group = "", categoryId = book.categories[0].id), moved)
         val removed = insertCategoryEntries(emptyList(), listOf(moved), placement.copy(group = ""), null).single()
-        assertEquals(source, removed)
+        assertEquals(source.copy(group = ""), removed)
     }
     @Test fun deletingCategoryPromotesChildrenInPlaceAndKeepsOtherGroups() {
         val book = fixture(); val expected = book.orderedEntries().map { if (it.categoryId == book.categories[0].id) it.copy(categoryId = null) else it }
@@ -91,18 +90,19 @@ class LorebookEntryUnifiedOrderTest {
         val reopened = JsonInstant.decodeFromString<List<UIMessage>>(json)
         assertEquals(result.map { it.role to it.parts }, reopened.map { it.role to it.parts })
         val output = reopened.flatMap { it.parts }.filterIsInstance<UIMessagePart.Text>().joinToString("\n") { it.text }
-        val offsets = book.orderedEntries().map { entry ->
+        val offsets = book.entries.map { entry ->
             assertEquals(1, Regex(Regex.escape(entry.content)).findAll(json).count())
             output.indexOf(entry.content)
         }
         assertEquals(offsets.sorted(), offsets)
     }
-    @Test fun movedCategoryPromptSerializesInTheNewOrder() {
+    @Test fun movingCategoryDoesNotReorderPromptOrStorage() {
         val book = fixture()
         val moved = moveLorebookCategory(book, book.categories[0].id, LorebookEntryPlacement(book.entries.last().id, true, "", categoryTarget = true))
         val reopened = JsonInstant.decodeFromString<Lorebook>(JsonInstant.encodeToString(moved))
         val output = text(reopened)
-        assertEquals(reopened.orderedEntries().map { it.content }, Regex("\\[\\[MARK_\\d+\\]\\]").findAll(output).map { it.value }.toList())
+        assertEquals(book.entries, reopened.entries)
+        assertEquals(text(book), output)
     }
     @Test fun crossBookCopyAssignsOnlyTargetCategoryAndFreshEntryIdentity() {
         val source = fixture(); val category = LorebookCategory(name = "Target")
@@ -131,7 +131,7 @@ class LorebookEntryUnifiedOrderTest {
         val inserted = insertLorebookEntry(book.orderedEntries(), entry, p)
         val updated = book.withPlacedEntries(inserted, setOf(entry.id), p)
         assertEquals(book.orderedNodes().first(), updated.orderedNodes().first())
-        assertEquals(entry.copy(categoryId = book.categories.last().id), updated.entries.single { it.id == entry.id })
+        assertEquals(entry.copy(group = "", categoryId = book.categories.last().id), updated.entries.single { it.id == entry.id })
     }
 
 }

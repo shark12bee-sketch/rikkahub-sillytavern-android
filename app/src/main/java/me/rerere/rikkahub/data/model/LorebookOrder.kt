@@ -1,23 +1,31 @@
 package me.rerere.rikkahub.data.model
 
-/** One root traversal shared by the editor and prompt collection. Collapse state is UI-only. */
+/** Ordinary editor roots only. Competitive groups and Prompt collection retain their own semantics. */
 fun Lorebook.orderedNodes(): List<LorebookOrderNode> {
     val groups = categories.map { it.id }
-    val singles = entries.filter { it.categoryId !in groups }.map { LorebookOrderNode(entryId = it.id) }
+    val singles = entries.filter { it.group.isBlank() && it.categoryId !in groups }.map { LorebookOrderNode(entryId = it.id) }
     val valid = groups.map { LorebookOrderNode(categoryId = it) } + singles
     return (rootOrder.filter { it in valid } + valid).distinct()
 }
 
+/** Editor traversal includes each entity once: exclusive members above ordinary roots. */
 fun Lorebook.orderedEntries(): List<PromptInjection.RegexInjection> {
-    val byGroup = entries.groupBy { it.categoryId }
-    val byId = entries.associateBy { it.id }
+    val exclusive = (entryGroups + entries.map { it.group }).filter { it.isNotBlank() }.distinct()
+    return exclusive.flatMap { name -> entries.filter { it.group == name } } + orderedOrdinaryEntries()
+}
+
+fun Lorebook.orderedOrdinaryEntries(): List<PromptInjection.RegexInjection> {
+    val ordinary = entries.filter { it.group.isBlank() }
+    val byGroup = ordinary.groupBy { it.categoryId }
+    val byId = ordinary.associateBy { it.id }
     return orderedNodes().flatMap { node ->
         node.categoryId?.let { byGroup[it].orEmpty() } ?: listOfNotNull(byId[node.entryId])
     }.distinctBy { it.id }
 }
 
 /** Rebuild order after an entry insertion, keeping explicitly saved empty groups in their slots. */
-fun Lorebook.withOrderedEntries(updated: List<PromptInjection.RegexInjection>): Lorebook {
+fun Lorebook.withOrderedEntries(values: List<PromptInjection.RegexInjection>): Lorebook {
+    val updated = values.map { if (it.group.isNotBlank() && it.categoryId != null) it.copy(categoryId = null) else it }
     val groups = categories.map { it.id }
     val exclusiveGroups = (entryGroups + entries.map { it.group } + updated.map { it.group }).filter { it.isNotBlank() }.distinct()
     if (entries.map { it.id to it.categoryId } == updated.map { it.id to it.categoryId })
@@ -29,9 +37,9 @@ fun Lorebook.withOrderedEntries(updated: List<PromptInjection.RegexInjection>): 
         val value = copy(entries = updated, entryGroups = exclusiveGroups)
         return value.copy(rootOrder = value.orderedNodes())
     }
-    val nodes = updated.map { if (it.categoryId !in groups) LorebookOrderNode(entryId = it.id) else LorebookOrderNode(categoryId = it.categoryId) }.distinct().toMutableList()
+    val nodes = updated.filter { it.group.isBlank() }.map { if (it.categoryId !in groups) LorebookOrderNode(entryId = it.id) else LorebookOrderNode(categoryId = it.categoryId) }.distinct().toMutableList()
     orderedNodes().forEachIndexed { index, node ->
-        if (node.categoryId in groups && updated.none { it.categoryId == node.categoryId }) nodes.add(index.coerceAtMost(nodes.size), node)
+        if (node.categoryId in groups && updated.none { it.group.isBlank() && it.categoryId == node.categoryId }) nodes.add(index.coerceAtMost(nodes.size), node)
     }
     return copy(entries = updated, entryGroups = exclusiveGroups, rootOrder = nodes.distinct())
 }

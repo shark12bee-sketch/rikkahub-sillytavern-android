@@ -44,7 +44,7 @@ internal fun insertLorebookBatch(
     val groups = selected.map { it.group.ifBlank { "" } }.distinct()
     val destination = placement?.group
     require(destination != null || groups.size == 1) { "跨组操作请明确选择目标分组" }
-    val inserted = if (destination == null) selected else selected.map { if (it.group == destination) it else it.copy(group = destination) }
+    val inserted = if (destination == null) selected else selected.map { if (it.group == destination) it else it.copy(group = destination, categoryId = if (destination.isNotBlank()) null else it.categoryId) }
     require((remaining + selected).map { it.id }.distinct().size == remaining.size + selected.size) {
         "条目 ID 冲突，未修改世界书"
     }
@@ -89,7 +89,7 @@ internal fun applyLorebookBatch(books: List<Lorebook>, request: LorebookBatchReq
             val selected = orderedLorebookSelection(request.draft.orderedEntries(), action.ids)
             require(selected.size == action.ids.size) { "选中的条目已删除，请取消并重新选择" }
             insertLorebookBatch(
-                request.draft.orderedEntries().filterNot { it.id in action.ids }, selected, request.placement, request.atEnd,
+                request.draft.entries.filterNot { it.id in action.ids }, selected, request.placement, request.atEnd,
             )
         }
         is LorebookBatchAction.Copy -> {
@@ -106,7 +106,7 @@ internal fun applyLorebookBatch(books: List<Lorebook>, request: LorebookBatchReq
                 while (!occupied.add(id)) id = Uuid.random()
                 entry.copy(id = id, categoryId = null)
             }
-            insertLorebookBatch(request.draft.orderedEntries(), copies, request.placement, request.atEnd)
+            insertLorebookBatch(request.draft.entries, copies, request.placement, request.atEnd)
         }
     }
     val placedIds = when (val action = request.action) {

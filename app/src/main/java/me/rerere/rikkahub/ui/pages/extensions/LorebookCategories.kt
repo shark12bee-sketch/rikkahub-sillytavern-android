@@ -36,24 +36,24 @@ internal fun moveLorebookCategory(book: Lorebook, id: Uuid, placement: LorebookE
     if (from !in nodes || target !in nodes || from == target) return book
     val order = nodes.filterNot { it == from }.toMutableList()
     order.add(order.indexOf(target) + if (placement.after) 1 else 0, from)
-    return book.copy(rootOrder = order).let { it.copy(entries = it.orderedEntries()) }
+    return book.copy(rootOrder = order)
 }
 
-/** Category placements never write group, inclusionGroup, weight or any injection configuration. */
+/** An explicit ordinary destination releases competitive membership, keeping all trigger settings. */
 internal fun insertCategoryEntries(remaining: List<PromptInjection.RegexInjection>, selected: List<PromptInjection.RegexInjection>,
     placement: LorebookEntryPlacement, atEnd: Boolean?): List<PromptInjection.RegexInjection> {
     require((remaining + selected).map { it.id }.distinct().size == remaining.size + selected.size) { "条目 ID 冲突" }
     val destination = placement.group?.takeIf { it.isNotBlank() }?.let { Uuid.parse(it) }
-    val inserted = selected.map { it.copy(categoryId = destination) }
+    val inserted = selected.map { it.copy(group = "", categoryId = destination) }
     val anchor = placement.rootGroup?.let { Uuid.parse(it) }
     val index = when {
         placement.targetId != null -> {
-            val index = remaining.indexOfFirst { it.id == placement.targetId && it.categoryId == destination }
+            val index = remaining.indexOfFirst { it.id == placement.targetId && it.group.isBlank() && it.categoryId == destination }
             require(index >= 0) { "分类落点已改变，请重新选择" }
             index + if (placement.after) 1 else 0
         }
         else -> {
-            val matching = remaining.indices.filter { remaining[it].categoryId == (anchor ?: destination) }
+            val matching = remaining.indices.filter { remaining[it].group.isBlank() && remaining[it].categoryId == (anchor ?: destination) }
             if (matching.isEmpty()) remaining.size else if (atEnd ?: placement.after) matching.last() + 1 else matching.first()
         }
     }
@@ -81,5 +81,13 @@ internal fun Lorebook.withPlacedEntries(entries: List<PromptInjection.RegexInjec
     val at = order.indexOf(LorebookOrderNode(categoryId = anchor))
     require(at >= 0) { "目标分类已不存在" }
     order.addAll(at + if (placement.after) 1 else 0, moved)
-    return updated.copy(rootOrder = order).let { it.copy(entries = it.orderedEntries()) }
+    return updated.copy(rootOrder = order)
+}
+
+/** Root shortcuts are relative to ordinary entries too, not just other categories. */
+internal fun moveLorebookCategoryToEdge(book: Lorebook, id: Uuid, atEnd: Boolean): Lorebook {
+    val node = LorebookOrderNode(categoryId = id)
+    require(book.categories.any { it.id == id }) { "分类已不存在" }
+    val remaining = book.orderedNodes().filterNot { it == node }
+    return book.copy(rootOrder = if (atEnd) remaining + node else listOf(node) + remaining)
 }
