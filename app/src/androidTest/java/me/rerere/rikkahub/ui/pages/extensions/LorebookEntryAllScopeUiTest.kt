@@ -35,7 +35,11 @@ class LorebookEntryAllScopeUiTest {
         val help = compose.onNodeWithText("ⓘ 复制说明").fetchSemanticsNode().boundsInRoot
         val scope = compose.onNodeWithTag("lorebook-selection-scope").fetchSemanticsNode().boundsInRoot
         val buttons = compose.onNodeWithText("全选该组").fetchSemanticsNode().boundsInRoot
-        assertTrue(help.bottom <= scope.top);assertTrue(scope.bottom <= buttons.top)
+        val title = compose.onNodeWithText("跨书复制 · 已选 0 条").fetchSemanticsNode().boundsInRoot
+        assertTrue(help.left >= title.right)
+        assertTrue(help.top < title.bottom && title.top < help.bottom)
+        assertTrue(maxOf(help.bottom, title.bottom) <= scope.top)
+        assertTrue(scope.bottom <= buttons.top)
         all("跨书复制")
         captureLorebookRepairEvidence("all-scope-copy-layout")
         compose.onNodeWithText("完成选择").performClick()
@@ -51,9 +55,9 @@ class LorebookEntryAllScopeUiTest {
     @Test fun settingsAllIncludesFoldedGroupsAndPreservesOtherFields() {
         begin("批量设置");all("批量设置")
         compose.onNodeWithText("设置所选").performClick()
-        compose.onAllNodes(isToggleable() and hasAnyAncestor(isDialog() and hasAnyDescendant(hasText("批量设置 · 4 条")))).onFirst().performClick()
+        compose.onNodeWithTag("bulk-select-PRIORITY").performClick()
         compose.onNodeWithTag("bulk-priority").performTextReplacement("90")
-        compose.onNodeWithText("应用设置").performClick()
+        compose.onNodeWithText("应用到 4 个条目").performClick()
         compose.runOnIdle { assertEquals(original.entries.map { it.copy(priority = 90) }, stored.entries) }
     }
     @Test fun moveAllIncludesFoldedGroupsAndUpdatesEverySelectedEntry() {
