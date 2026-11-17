@@ -169,8 +169,9 @@ class LorebookEntryRepairUiTest {
         draft = before
         stored = before
         showSheet()
-        // Scroll the destination into view too: a visible source alone does not compose later rows.
-        compose.onNodeWithTag("lorebook-entry-list").performScrollToNode(hasTestTag("lorebook-group:B"))
+        // The exclusive region is now above the root entries. Bring the actual source rail
+        // fully into view; the nearby B header must remain visible in the same viewport.
+        compose.onNodeWithTag("lorebook-entry-list").performScrollToNode(hasContentDescription("拖动排序 Alpha"))
         compose.onNodeWithContentDescription("拖动排序 Alpha").assertIsDisplayed()
         compose.onNodeWithTag("lorebook-group:B").assertIsDisplayed()
         captureLorebookRepairEvidence("ordinary-before-drag")
