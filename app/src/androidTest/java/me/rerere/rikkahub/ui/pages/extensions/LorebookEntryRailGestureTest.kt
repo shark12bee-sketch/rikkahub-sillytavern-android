@@ -10,6 +10,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.asAndroidBitmap
+import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.assertIsDisplayed
@@ -142,6 +144,10 @@ class LorebookEntryRailGestureTest {
         )
         val screenshot = checkNotNull(InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot())
         File(folder, "editor.png").outputStream().use { screenshot.compress(Bitmap.CompressFormat.PNG, 100, it) }
+        // SurfaceFlinger may still show a blank frame although Compose measurement is ready.
+        // Capture the measured sheet directly as a second, deterministic visual artifact.
+        val content = compose.onNodeWithTag("lorebook-editor-sheet").captureToImage().asAndroidBitmap()
+        File(folder, "editor-content.png").outputStream().use { content.compress(Bitmap.CompressFormat.PNG, 100, it) }
         assertTrue("Compact batch height: ${safety.height / pxPerDp}dp", safety.height / pxPerDp in 120f..150.5f)
         assertTrue("No disabled-entry or warning placeholders above the safety area", safety.top - titleBounds.bottom <= 12f * pxPerDp)
         assertTrue("List viewport: ${list.height / pxPerDp}dp", list.height > safety.height * 2f)
