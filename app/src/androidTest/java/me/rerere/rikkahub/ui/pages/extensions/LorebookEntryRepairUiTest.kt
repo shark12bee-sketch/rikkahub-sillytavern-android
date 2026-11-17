@@ -178,12 +178,12 @@ class LorebookEntryRepairUiTest {
         // fully into view; the nearby B header must remain visible in the same viewport.
         val list = compose.onNodeWithTag("lorebook-entry-list")
         list.performScrollToNode(hasContentDescription("拖动排序 Alpha"))
-        // ScrollToIndex aligns the source at the top, which can hide the upper target.
-        // Align the measured source near the viewport bottom so both actual hit regions fit.
+        // In the restored single-view layout B is below the member in A.
+        // Keep the source near the viewport top so the following target header stays visible.
         val viewport = list.fetchSemanticsNode().boundsInRoot
         val source = compose.onNodeWithContentDescription("拖动排序 Alpha").fetchSemanticsNode().boundsInRoot
-        val inset = minOf(source.height, viewport.height) * 0.05f
-        list.performSemanticsAction(SemanticsActions.ScrollBy) { scroll -> scroll(0f, source.bottom - viewport.bottom + inset) }
+        val inset = viewport.height * 0.1f
+        list.performSemanticsAction(SemanticsActions.ScrollBy) { scroll -> scroll(0f, source.top - viewport.top - inset) }
         compose.waitForIdle()
         compose.onNodeWithContentDescription("拖动排序 Alpha").assertIsDisplayed()
         compose.onNodeWithTag("lorebook-group:B").assertIsDisplayed()

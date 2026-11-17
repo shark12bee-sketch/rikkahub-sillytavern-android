@@ -7,6 +7,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.unit.dp
@@ -56,6 +57,13 @@ class LorebookEntryGroupsUiTest {
     }
 
     private fun move(handle: SemanticsNodeInteraction, target: SemanticsNodeInteraction, held: Boolean) {
+        // A shelf handle stays fixed. Center a measured destination before dragging so this
+        // placement test cannot accidentally become an edge-autoscroll test after group expansion.
+        val list = compose.onNodeWithTag("lorebook-entry-list")
+        val viewport = list.fetchSemanticsNode().boundsInRoot
+        val initial = target.fetchSemanticsNode().boundsInRoot
+        list.performSemanticsAction(SemanticsActions.ScrollBy) { scroll -> scroll(0f, initial.center.y - viewport.center.y) }
+        compose.waitForIdle()
         val bounds = handle.fetchSemanticsNode().boundsInRoot
         val destination = target.fetchSemanticsNode().boundsInRoot
         compose.mainClock.autoAdvance = false
