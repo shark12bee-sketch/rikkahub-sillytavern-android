@@ -64,7 +64,7 @@ jobs:
           PY
           chmod +x gradlew
       - name: Test lorebook entry editor
-        if: matrix.kind == 'feature' && inputs.ui_test_class == '' && !inputs.selection_regression
+        if: matrix.kind == 'feature' && !inputs.selection_regression
         run: |
           set -o pipefail
           ./gradlew :app:testDebugUnitTest \
