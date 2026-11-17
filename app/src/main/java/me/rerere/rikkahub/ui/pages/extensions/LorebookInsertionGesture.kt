@@ -28,7 +28,7 @@ import androidx.compose.ui.semantics.semantics
 import kotlin.uuid.Uuid
 
 internal data class LorebookThumbnailWindow(val firstIndex: Int = 0, val offset: Int = 0)
-internal enum class LorebookDragSource { SHELF, LIST }
+internal enum class LorebookDragSource { SHELF, LIST, GROUP }
 
 internal data class LorebookInsertionDrag(
     val token: Uuid = Uuid.random(),
@@ -41,6 +41,7 @@ internal data class LorebookInsertionDrag(
     val submitted: Boolean = false,
     val source: LorebookDragSource = LorebookDragSource.SHELF,
     val hasMoved: Boolean = false,
+    val groupName: String? = null,
 )
 
 /** One detector for both thumbnail and group handles; layout never determines the drop target. */
@@ -55,6 +56,7 @@ internal fun lorebookInsertionHandle(
     onTap: (() -> Unit)? = null,
     source: LorebookDragSource = LorebookDragSource.SHELF,
     origin: (() -> Rect?)? = null,
+    groupName: String? = null,
 ): Modifier {
     var coordinates by remember { mutableStateOf<LayoutCoordinates?>(null) }
     val currentFeedback by rememberUpdatedState(feedback)
@@ -77,12 +79,12 @@ internal fun lorebookInsertionHandle(
     fun start(position: Offset): Uuid? {
         if (state.pointer != null) return null
         val point = root(position) ?: return null
-        val bounds = if (source == LorebookDragSource.LIST) currentOrigin?.invoke()
+        val bounds = if (source != LorebookDragSource.SHELF) currentOrigin?.invoke()
             else if (entryId == null) state.previewBounds else coordinates?.boundsInRoot()
         if (bounds != null) {
             state.previousPlacement = null
-            state.drag = LorebookInsertionDrag(entryId = entryId, origin = bounds, start = point, window = state.previewWindow, source = source)
-            if (source == LorebookDragSource.LIST) pinned = pinnable?.pin()
+            state.drag = LorebookInsertionDrag(entryId = entryId, origin = bounds, start = point, window = state.previewWindow, source = source, groupName = groupName)
+            if (source != LorebookDragSource.SHELF) pinned = pinnable?.pin()
             haptic.performHapticFeedback(HapticFeedbackType.GestureThresholdActivate)
         } else return null
         update(position)
@@ -107,7 +109,7 @@ internal fun lorebookInsertionHandle(
         onClick(label = "查看条目预览") { currentTap?.invoke(); true }
     }
     return Modifier.onGloballyPositioned { coordinates = it }.then(tapSemantics)
-        .pointerInput(state, longPress, enabled, entryId, source) {
+        .pointerInput(state, longPress, enabled, entryId, source, groupName) {
             if (!enabled) return@pointerInput
             var ownedToken: Uuid? = null
             fun ownsGesture() = ownedToken != null && state.drag?.token == ownedToken

@@ -43,7 +43,7 @@ import me.rerere.rikkahub.data.model.PromptInjection
 import java.util.Locale
 import kotlin.uuid.Uuid
 
-internal enum class LorebookBatchMode(val label: String) { MOVE("批量移动"), COPY("跨书复制"), DELETE("批量删除") }
+internal enum class LorebookBatchMode(val label: String) { MOVE("批量移动"), COPY("跨书复制"), DELETE("批量删除"), SETTINGS("批量设置") }
 
 internal data class LorebookBatchPreview(
     val id: Uuid,
@@ -143,17 +143,22 @@ internal fun LorebookSelectionControls(
         Text("${mode.label} · 已选 ${actual.size} 条", style = MaterialTheme.typography.labelLarge)
         LorebookGroupTargetSelector(groups + entries.map { it.group }, selectionGroup, enabled,
             prefix = "全选范围", tag = "lorebook-selection-scope") { selectionGroup = it }
-        if (mode == LorebookBatchMode.COPY) Text(
-            "完成后返回世界书列表。来源书不会修改，来源草稿的未保存修改不会写入。",
-            style = MaterialTheme.typography.bodySmall,
-        )
+        if (mode == LorebookBatchMode.COPY) {
+            var showHelp by remember { mutableStateOf(false) }
+            Box {
+                TextButton(onClick = { showHelp = !showHelp }) { Text("ⓘ 复制说明") }
+                if (showHelp) LorebookReadOnlyPopup("复制说明", "lorebook-copy-help", "关闭说明", { showHelp = false }) {
+                    Text("完成后返回世界书列表。来源书不会修改，来源草稿的未保存修改不会写入。")
+                }
+            }
+        }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             TextButton(onClick = { onSelect(toggleLorebookScope(entries, selected, selectionGroup)) }, enabled = enabled && inGroup.isNotEmpty()) {
                 Text(if (inGroup.isNotEmpty() && selected.containsAll(inGroup)) "取消全选" else "全选该组")
             }
             TextButton(onClick = onCancel, enabled = enabled) { Text("取消批量操作") }
             TextButton(onClick = onDone, enabled = enabled && actual.isNotEmpty()) {
-                Text(if (mode == LorebookBatchMode.DELETE) "删除所选" else "完成选择")
+                Text(when (mode) { LorebookBatchMode.DELETE -> "删除所选"; LorebookBatchMode.SETTINGS -> "设置所选"; else -> "完成选择" })
             }
         }
         if (mode == LorebookBatchMode.MOVE && onMoveToGroup != null) Row {
@@ -220,6 +225,7 @@ internal fun lorebookCopyConfirmation(request: LorebookBatchRequest): String {
 }
 
 internal fun lorebookInsertionInstructions(mode: LorebookBatchMode?): String = when (mode) {
+    LorebookBatchMode.SETTINGS -> "只应用主动勾选的字段；取消不修改数据。"
     LorebookBatchMode.DELETE -> "选择需要删除的条目，确认数量后删除；取消不修改数据。"
     null -> "拖动右侧手柄拿起新增条目。拖出安全区选择插入位置；返回安全区暂停。拖到组头会插入组内最后；首尾按钮只作用于当前范围。取消不会写入条目。"
     else -> "短按方块：预览条目。\n长按方块：单条拖动。\n长按右侧三条杠：整组拖动。\n拖出安全区：选择插入位置。\n返回安全区：暂停插入判断。\n拖到组头：插入该组最后；首尾按钮只作用于当前范围。" +

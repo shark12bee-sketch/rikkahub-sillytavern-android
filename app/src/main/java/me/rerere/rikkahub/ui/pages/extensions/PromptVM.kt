@@ -28,6 +28,7 @@ class PromptVM(
 
     internal suspend fun commitLorebookBatch(request: LorebookBatchRequest) = when (val action = request.action) {
         is LorebookBatchAction.Move -> lorebookBatchWriter.commit(request)
+        is LorebookBatchAction.Settings -> lorebookBatchWriter.commit(request)
         is LorebookBatchAction.Delete -> lorebookBatchWriter.commit(request)
         is LorebookBatchAction.Copy -> lorebookCopies.commit(action.task, action.ids) { lorebookBatchWriter.commit(request) }
     }

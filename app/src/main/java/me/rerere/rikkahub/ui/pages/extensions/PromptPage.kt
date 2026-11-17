@@ -608,7 +608,7 @@ private fun ModeInjectionEditSheet(
 }
 
 @Composable
-private fun InjectionPositionSelector(
+internal fun InjectionPositionSelector(
     position: InjectionPosition,
     onSelect: (InjectionPosition) -> Unit
 ) {
@@ -1371,6 +1371,7 @@ internal fun LorebookEditSheet(
     var selectionMode by rememberSaveable(book.id.toString()) { mutableStateOf(LorebookBatchMode.MOVE.name) }
     var showGroupManagement by remember { mutableStateOf(false) }
     var groupMoveConfirmation by remember { mutableStateOf<LorebookBatchRequest?>(null) }
+    var showBulkSettings by remember { mutableStateOf(false) }
     var deleteConfirmation by remember { mutableStateOf<LorebookBatchRequest?>(null) }
     var copyConfirmation by remember { mutableStateOf<LorebookBatchRequest?>(null) }
     var selectedStrings by rememberSaveable(book.id.toString()) { mutableStateOf(emptyList<String>()) }
@@ -1417,7 +1418,7 @@ internal fun LorebookEditSheet(
                     selecting = false
                     selectedStrings = emptyList()
                 }
-                if (action is LorebookBatchAction.Delete) {
+                if (action is LorebookBatchAction.Delete || action is LorebookBatchAction.Settings) {
                     selectedStrings = emptyList()
                     selecting = false
                 }
@@ -1519,6 +1520,7 @@ internal fun LorebookEditSheet(
                     Text("批量管理条目")
                 }
                 DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
+                    DropdownMenuItem(text = { Text("批量设置") }, onClick = { menuExpanded = false; selectionMode = LorebookBatchMode.SETTINGS.name; selecting = true })
                     DropdownMenuItem(text = { Text("删除条目") }, onClick = { menuExpanded = false; selectionMode = LorebookBatchMode.DELETE.name; selecting = true })
                     DropdownMenuItem(text = { Text("移动到本书其他位置") }, onClick = { menuExpanded = false; selectionMode = LorebookBatchMode.MOVE.name; selecting = true })
                     DropdownMenuItem(
@@ -1535,7 +1537,10 @@ internal fun LorebookEditSheet(
                 onDone = {
                     val ordered = orderedLorebookSelection(book.entries, selectedIds)
                     try {
-                        if (selectionMode == LorebookBatchMode.DELETE.name) {
+                        if (selectionMode == LorebookBatchMode.SETTINGS.name) {
+                            showBulkSettings = true
+                            return@LorebookSelectionControls
+                        } else if (selectionMode == LorebookBatchMode.DELETE.name) {
                             deleteConfirmation = LorebookBatchRequest(book, baseline, LorebookBatchAction.Delete(ordered.map { it.id }.toSet()))
                             return@LorebookSelectionControls
                         } else if (selectionMode == LorebookBatchMode.COPY.name) checkNotNull(onStageCopy).invoke(ordered)
@@ -1637,6 +1642,7 @@ internal fun LorebookEditSheet(
                 onEntriesChange = { if (!savingBatch) onEdit(book.withLorebookEntries(it)) },
                 onEditEntry = { if (!savingBatch) entryEditState.open(it) },
                 onManageGroups = { showGroupManagement = true },
+                onGroupsChange = { if (!savingBatch && !copyBusy) onEdit(it) },
                 onAddEntry = { group -> entryEditState.open(PromptInjection.RegexInjection(group = group)) },
                 onGroupSettings = { group, entries -> groupEditState.open(group to entries) },
             )
@@ -1669,6 +1675,11 @@ internal fun LorebookEditSheet(
         )
     }
 
+    if (showBulkSettings) LorebookBulkSettingsDialog(orderedLorebookSelection(book.entries, selectedIds),
+        onDismiss = { showBulkSettings = false }, onApply = { patch ->
+            showBulkSettings = false
+            executeBatch(LorebookBatchRequest(book, baseline, LorebookBatchAction.Settings(selectedIds, patch)))
+        })
     deleteConfirmation?.let { request ->
         val count = (request.action as LorebookBatchAction.Delete).ids.size
         AlertDialog(onDismissRequest = { deleteConfirmation = null }, title = { Text("确认删除所选") },
@@ -1964,6 +1975,7 @@ internal fun LorebookGroupSection(
     groupIndex: Int = 0,
     expanded: Boolean,
     onExpandedChange: () -> Unit,
+    headerGesture: Modifier? = null,
 ) {
     val rotationAngle by animateFloatAsState(
         targetValue = if (expanded) 90f else 0f,
@@ -1990,7 +2002,7 @@ internal fun LorebookGroupSection(
             ),
             modifier = Modifier
                 .fillMaxWidth()
-                .clickable { onExpandedChange() },
+                .then(headerGesture ?: Modifier.clickable { onExpandedChange() }),
         ) {
             Row(
                 modifier = Modifier
