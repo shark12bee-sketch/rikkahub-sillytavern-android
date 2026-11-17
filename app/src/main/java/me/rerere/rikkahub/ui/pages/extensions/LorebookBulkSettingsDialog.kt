@@ -18,7 +18,7 @@ internal fun LorebookBulkSettingsDialog(entries: List<PromptInjection.RegexInjec
             RegexEntryEditorFields(state.draft, {}, bulk = state, modifier = Modifier.weight(1f, fill = false))
             Text("将覆盖：${state.selected.joinToString { it.label }.ifBlank { "尚未选择字段" }}")
         }
-    }, confirmButton = { TextButton(onClick = { onApply(state.patch()) }, enabled = state.canApply) {
+    }, confirmButton = { TextButton(onClick = { if (state.canApply) onApply(state.patch()) }, enabled = state.canApply) {
         Text("应用到 ${entries.size} 个条目")
     } }, dismissButton = { TextButton(onClick = onDismiss) { Text("取消设置") } })
 }
