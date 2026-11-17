@@ -13,6 +13,7 @@ import me.rerere.hugeicons.stroke.Book01
 import me.rerere.hugeicons.stroke.Cancel01
 import me.rerere.hugeicons.stroke.Delete01
 import me.rerere.hugeicons.stroke.FileImport
+import me.rerere.hugeicons.stroke.Link01
 import me.rerere.hugeicons.stroke.Folder01
 import me.rerere.hugeicons.stroke.MagicWand01
 import me.rerere.hugeicons.stroke.Setting07
@@ -1981,6 +1982,7 @@ internal fun LorebookGroupSection(
     expanded: Boolean,
     onExpandedChange: () -> Unit,
     headerGesture: Modifier? = null,
+    exclusive: Boolean = false,
 ) {
     val rotationAngle by animateFloatAsState(
         targetValue = if (expanded) 90f else 0f,
@@ -2025,8 +2027,8 @@ internal fun LorebookGroupSection(
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 Icon(
-                    HugeIcons.Folder01,
-                    contentDescription = null,
+                    if (exclusive) HugeIcons.Link01 else HugeIcons.Folder01,
+                    contentDescription = if (exclusive) "互斥组" else "分类组",
                     modifier = Modifier.size(20.dp),
                     tint = folderColor,
                 )

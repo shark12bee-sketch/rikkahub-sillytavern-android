@@ -91,6 +91,7 @@ internal fun LorebookEntryList(
     var collapsed by rememberSaveable(book.id.toString()) { mutableStateOf(false) }
     var expandedExclusive by rememberSaveable(book.id.toString()) { mutableStateOf(emptyList<String>()) }
     var expandedGroups by rememberSaveable(book.id.toString()) { mutableStateOf(emptyList<String>()) }
+    var deletingEntry by remember(book.id) { mutableStateOf<Uuid?>(null) }
     val movingIds = if (batch?.mode == LorebookBatchMode.MOVE) batch.entries.map { it.id }.toSet() else emptySet()
     val visibleEntries = book.orderedEntries().filterNot { it.id in movingIds }
     val hasPending = pendingEntry != null || batch != null
@@ -147,7 +148,7 @@ internal fun LorebookEntryList(
              ).let { value ->
                 value.copy(placement = value.placement?.let { placement ->
                     if (placement.group?.startsWith("exclusive:") == true || placement.rootGroup?.startsWith("exclusive:") == true) placement.copy(targetId = null, group = (placement.rootGroup ?: placement.group)?.removePrefix("exclusive:"), rootGroup = null, categoryTarget = false)
-                    else placement.copy(categoryTarget = !exclusiveDrag)
+                    else placement.copy(categoryTarget = !exclusiveDrag, after = if (placement.targetId == null && placement.group.isNullOrBlank() && placement.rootGroup == null) false else placement.after)
                 })
             }
         }
@@ -176,7 +177,7 @@ internal fun LorebookEntryList(
                         var cardCoordinates by remember { mutableStateOf<LayoutCoordinates?>(null) }
                         DisposableEffect(entry.id) { onDispose { measuredTargets.remove(entry.id.toString()) } }
                         val membershipColor = if (group.startsWith("exclusive:")) MaterialTheme.colorScheme.tertiary.copy(alpha = 0.35f) else MaterialTheme.colorScheme.primary.copy(alpha = 0.25f)
-                        Box(Modifier.animateItem().drawBehind {
+                        Box(Modifier.animateItem().testTag("lorebook-entry:${entry.id}").drawBehind {
                             if (group.isNotBlank()) drawLine(membershipColor, Offset(2.dp.toPx(), 0f), Offset(2.dp.toPx(), size.height), 2.dp.toPx())
                         }.padding(start = if (group.isNotBlank()) 12.dp else 0.dp).onGloballyPositioned { coordinates ->
                             cardCoordinates = coordinates
@@ -215,7 +216,7 @@ internal fun LorebookEntryList(
                                                 }))
                                     },
                                     onEdit = { onEditEntry(entry) },
-                                    onDelete = { onEntriesChange(book.entries.filterNot { it.id == entry.id }) },
+                                    onDelete = { deletingEntry = entry.id },
                                     onUpdate = { edited -> onEntriesChange(book.entries.map { if (it.id == edited.id) edited else it }) },
                                 )
                             }
@@ -236,6 +237,16 @@ internal fun LorebookEntryList(
                             }
                         }
                     }
+    }
+
+    deletingEntry?.let { id ->
+        val entry = book.entries.firstOrNull { it.id == id }
+        if (entry != null) androidx.compose.material3.AlertDialog(
+            onDismissRequest = { deletingEntry = null }, title = { Text("删除条目？") },
+            text = { Text("将删除「${entry.name.ifBlank { "未命名条目" }}」本体。若只想移出互斥组或分类组，请取消并使用移动操作。") },
+            confirmButton = { TextButton(onClick = { onEntriesChange(book.entries.filterNot { it.id == id }); deletingEntry = null }, enabled = !batchBusy) { Text("确认删除条目") } },
+            dismissButton = { TextButton(onClick = { deletingEntry = null }) { Text("取消") } },
+        )
     }
 
     var rootOrigin by remember { mutableStateOf(Offset.Zero) }
@@ -292,7 +303,7 @@ internal fun LorebookEntryList(
                 if (!taskActive) item(key = "book-fields") {
                     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) { header() }
                 }
-                item(key = "exclusive-groups") { LorebookExclusiveGroupsTitle(onManageGroups) }
+                item(key = "exclusive-groups") { LorebookExclusiveGroupsTitle(onManageGroups, !batchBusy && insertion.pointer == null) }
                 lorebookEntryGroupNames(book).forEachIndexed { index, group ->
                     val entries = visibleEntries.filter { it.group == group }
                     val key = "exclusive:$group"
@@ -307,6 +318,11 @@ internal fun LorebookEntryList(
                     if (group in expandedExclusive) entryRows(entries, key)
                 }
                 item(key = "entry-controls") {
+                    DisposableEffect(book.id) { onDispose { measuredTargets.remove("entry-controls") } }
+                    Box(Modifier.testTag("lorebook-group:").onGloballyPositioned { c ->
+                        val top = c.localToRoot(Offset.Zero).y
+                        measuredTargets["entry-controls"] = LorebookDropTarget(null, "", top, top + c.size.height)
+                    }) {
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                         Text("条目（${book.entries.count { it.group.isBlank() }}）", modifier = Modifier.weight(1f))
                         TextButton(onClick = { collapsed = !collapsed }) {
@@ -314,6 +330,10 @@ internal fun LorebookEntryList(
                         }
                         TextButton(onClick = onManageCategories, enabled = !batchBusy && insertion.pointer == null) { Text("管理分类组") }
                         TextButton(onClick = { onAddCategoryEntry(null) }, enabled = !taskActive) { Text("新增") }
+                    }
+                    val placement = feedback.placement
+                    if (placement?.categoryTarget == true && placement.targetId == null && placement.group.isNullOrBlank() && placement.rootGroup == null)
+                        HorizontalDivider(Modifier.align(Alignment.BottomCenter), thickness = 3.dp, color = MaterialTheme.colorScheme.primary)
                     }
                 }
                 val grouped = visibleEntries.filter { it.group.isBlank() }.groupBy { it.categoryId?.toString().orEmpty() }
@@ -369,7 +389,7 @@ internal fun LorebookEntryList(
         }
         if (insertion.drag?.source == LorebookDragSource.GROUP) {
             val drag = checkNotNull(insertion.drag)
-            val count = remember(drag.token) { book.entries.count { if (drag.groupName?.startsWith("exclusive:") == true) it.group == drag.groupName.removePrefix("exclusive:") else it.categoryId?.toString() == drag.groupName } }
+            val count = remember(drag.token) { book.entries.count { if (drag.groupName?.startsWith("exclusive:") == true) it.group == drag.groupName.removePrefix("exclusive:") else it.group.isBlank() && it.categoryId?.toString() == drag.groupName } }
             LorebookInsertionOverlay(insertion, rootOrigin) {
                 androidx.compose.material3.Surface(Modifier.width(with(LocalDensity.current) { drag.origin.width.toDp() }).shadow(4.dp, MaterialTheme.shapes.large),
                     shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.surfaceContainerHigh) {

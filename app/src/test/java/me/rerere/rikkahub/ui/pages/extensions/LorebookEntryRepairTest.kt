@@ -78,12 +78,12 @@ class LorebookEntryRepairTest {
             LorebookBatchRequest(book, book, LorebookBatchAction.Delete(setOf(a.id)))) }.isFailure)
     }
 
-    @Test fun `ordinary drops use group end empty group and ungrouped with original ids`() {
+    @Test fun `exclusive header drops change membership in place while ungrouped drops retain ids`() {
         for (group in listOf("B", "Empty", "")) {
             val moved = moveLorebookEntry(book.entries, a.id, LorebookEntryPlacement.groupEdge(group, true))
             assertEquals(a.copy(group = group), moved.single { it.id == a.id })
             assertEquals(book.entries.drop(1), moved.filterNot { it.id == a.id })
-            if (group == "B") assertEquals(moved.indexOf(c) + 1, moved.indexOfFirst { it.id == a.id })
+            if (group.isNotBlank()) assertEquals(book.entries.map { it.id }, moved.map { it.id }) // Competitive members have no manual sort requirement.
         }
     }
 

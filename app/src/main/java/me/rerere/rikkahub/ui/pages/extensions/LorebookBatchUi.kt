@@ -253,7 +253,7 @@ internal fun lorebookCopyConfirmation(request: LorebookBatchRequest): String {
 internal fun lorebookInsertionInstructions(mode: LorebookBatchMode?): String = when (mode) {
     LorebookBatchMode.SETTINGS -> "只应用主动勾选的字段；取消不修改数据。"
     LorebookBatchMode.DELETE -> "选择需要删除的条目，确认数量后删除；取消不修改数据。"
-    null -> "拖动右侧手柄拿起新增条目。拖出安全区选择插入位置；返回安全区暂停。拖到组头会插入组内最后；首尾按钮只作用于当前范围。取消不会写入条目。"
-    else -> "短按方块：预览条目。\n长按方块：单条拖动。\n长按右侧三条杠：整组拖动。\n拖出安全区：选择插入位置。\n返回安全区：暂停插入判断。\n拖到组头：插入该组最后；首尾按钮只作用于当前范围。" +
+    null -> "拖动右侧手柄拿起新增条目。拖出安全区选择插入位置；返回安全区暂停。拖到分类组头会插入分类末尾，拖到互斥组头会加入竞争组；首尾按钮只作用于当前普通目标。取消不会写入条目。"
+    else -> "短按方块：预览条目。\n长按方块：单条拖动。\n长按右侧三条杠：整组拖动。\n拖出安全区：选择插入位置。\n返回安全区：暂停插入判断。\n拖到分类组头：插入分类末尾；拖到互斥组头：加入竞争组。首尾按钮只作用于当前普通目标。" +
         if (mode == LorebookBatchMode.COPY) "\n复制不会删除来源条目；副本生成独立 ID，确认目标后才保存。" else "\n确认落点前不修改原列表；保存成功后只移除已插入的暂存条目。"
 }

@@ -51,7 +51,7 @@ internal fun evaluateLorebookEntryDrag(
         .minByOrNull { minOf(abs(pointer.y - it.top), abs(pointer.y - it.bottom)) }
     val placement = target?.takeUnless { (draggedEntryId != null && it.id == draggedEntryId) || it.group == draggedGroup }?.let {
         if (it.id == null) {
-            if (draggedGroup == null && pointer.y < it.top + (it.bottom - it.top) * 0.15f)
+            if (draggedGroup == null && it.group.isNotBlank() && pointer.y < it.top + (it.bottom - it.top) * 0.15f)
                 LorebookEntryPlacement(null, false, "", rootGroup = it.group)
             else LorebookEntryPlacement.groupEdge(it.group, if (draggedGroup == null) true else pointer.y > (it.top + it.bottom) / 2f)
         }

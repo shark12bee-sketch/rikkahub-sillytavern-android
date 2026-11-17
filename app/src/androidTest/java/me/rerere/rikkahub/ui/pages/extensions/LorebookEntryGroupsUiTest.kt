@@ -52,7 +52,7 @@ class LorebookEntryGroupsUiTest {
 
     private fun chooseGroup(group: String) {
         compose.onNodeWithTag("lorebook-target-group").performClick()
-        compose.onNodeWithText("${if (group.isBlank()) "分类：未分类" else "互斥组：$group"}").performClick()
+        compose.onNode(hasText(if (group.isBlank()) "分类：未分类" else "互斥组：$group") and hasAnyAncestor(isPopup())).performClick()
     }
 
     private fun move(handle: SemanticsNodeInteraction, target: SemanticsNodeInteraction, held: Boolean) {
@@ -95,7 +95,7 @@ class LorebookEntryGroupsUiTest {
         compose.onNodeWithText("管理互斥组").performClick()
         compose.onNodeWithTag("lorebook-group-name").performTextInput("Created")
         compose.onNodeWithText("创建互斥组").performClick()
-        compose.onNodeWithText("0 条 · 互斥组名称").performScrollTo().assertIsDisplayed()
+        compose.onNode(hasText("Created") and hasSetTextAction()).performScrollTo().assertIsDisplayed()
         compose.onNodeWithText("完成互斥组管理").performClick()
         compose.onNodeWithTag("lorebook-entry-list").performScrollToNode(hasTestTag("lorebook-group:Created"))
         compose.onNodeWithTag("lorebook-group:Created").assertIsDisplayed()
@@ -213,7 +213,7 @@ class LorebookEntryGroupsUiTest {
             }
         }
         chooseGroup("Destination")
-        compose.onNodeWithText("插入最后").performClick()
+        compose.onNodeWithText("移入互斥组").performClick()
         compose.onNodeWithText("确认跨书复制").assertIsDisplayed()
         compose.onNodeWithText("「Destination」组内最后", substring = true).assertIsDisplayed()
         compose.onNodeWithText("目标为「Destination」分组", substring = true).assertIsDisplayed()

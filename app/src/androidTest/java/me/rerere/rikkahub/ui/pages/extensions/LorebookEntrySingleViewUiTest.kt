@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.unit.dp
@@ -67,5 +68,41 @@ class LorebookEntrySingleViewUiTest {
         compose.onNodeWithContentDescription("选择条目 互斥成员").assertIsOn()
         compose.runOnIdle { assertEquals(setOf(member.id), selected) }
         captureLorebookRepairEvidence("round14-expanded-group-survives-scroll")
+    }
+
+    @Test fun exclusiveMemberCanMoveOutToPreciseOrdinaryPositionWithOriginalIdentity() {
+        show()
+        compose.onNodeWithText("竞争甲").performClick()
+        val source = compose.onNodeWithContentDescription("拖动排序 互斥成员")
+        val from = source.fetchSemanticsNode().boundsInRoot
+        val target = compose.onNodeWithContentDescription("拖动排序 普通成员").fetchSemanticsNode().boundsInRoot
+        compose.mainClock.autoAdvance = false
+        source.performTouchInput { down(center) }
+        compose.mainClock.advanceTimeBy(700)
+        source.performTouchInput { moveTo(Offset(from.width / 2, target.bottom - 4 - from.top)) }
+        compose.mainClock.advanceTimeBy(64)
+        source.performTouchInput { up() }
+        compose.mainClock.autoAdvance = true
+        compose.waitForIdle()
+        compose.runOnIdle {
+            assertEquals(member.copy(group = "", categoryId = null), book.entries.single { it.id == member.id })
+            assertEquals(listOf(plain.id, member.id), book.orderedOrdinaryEntries().map { it.id })
+            assertEquals(2, book.entries.size)
+        }
+        captureLorebookRepairEvidence("round14-exclusive-release-to-ordinary")
+    }
+    @Test fun singleDeleteIsExplicitAndCancellationDoesNotDissolveGroup() {
+        show()
+        compose.onNodeWithText("竞争甲").performClick()
+        val delete = androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().targetContext
+            .getString(me.rerere.rikkahub.R.string.prompt_page_delete)
+        fun remove() = compose.onNode(hasContentDescription(delete) and hasAnyAncestor(hasTestTag("lorebook-entry:${member.id}"))).performClick()
+        val before = book
+        remove()
+        compose.onNodeWithText("取消").performClick()
+        compose.runOnIdle { assertEquals(before, book) }
+        remove()
+        compose.onNodeWithText("确认删除条目").performClick()
+        compose.runOnIdle { assertEquals(listOf(plain), book.entries); assertTrue("竞争甲" in book.entryGroups) }
     }
 }

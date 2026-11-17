@@ -194,7 +194,6 @@ class LorebookEntryRepairUiTest {
             assertEquals(listOf(a.copy(group = "B"), anchor, ungrouped), draft.entries)
             assertEquals(before, stored)
         }
-        expand("B")
         compose.onNodeWithTag("lorebook-entry-list").performScrollToNode(hasContentDescription("拖动排序 Alpha"))
         captureLorebookRepairEvidence("ordinary-group-drop")
         val confirm = InstrumentationRegistry.getInstrumentation().targetContext.getString(R.string.prompt_page_confirm)
@@ -219,7 +218,6 @@ class LorebookEntryRepairUiTest {
         compose.runOnIdle { assertEquals(a.copy(group = "Empty"), draft.entries.single { it.id == a.id }) }
         compose.onNodeWithTag("lorebook-entry-list").performScrollToNode(hasContentDescription("拖动排序 Alpha"))
         compose.runOnIdle { writes = 0 }
-        compose.onNodeWithText("Empty").performClick()
         compose.onNodeWithTag("lorebook-entry-list").performScrollToNode(hasContentDescription("拖动排序 Alpha"))
         // Ordinary entry Loose is the actual target for release out of competition.
         dragTo(handle, compose.onNodeWithContentDescription("拖动排序 Loose"))

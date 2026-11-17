@@ -18,7 +18,7 @@ import me.rerere.rikkahub.data.model.*
 
 /** One title row; members are lazy siblings owned by LorebookEntryList, never a second view. */
 @Composable
-internal fun LorebookExclusiveGroupsTitle(onManage: () -> Unit) {
+internal fun LorebookExclusiveGroupsTitle(onManage: () -> Unit, enabled: Boolean = true) {
     var showInfo by remember { mutableStateOf(false) }
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Text("互斥组", style = MaterialTheme.typography.titleMedium)
@@ -29,7 +29,7 @@ internal fun LorebookExclusiveGroupsTitle(onManage: () -> Unit) {
             }
         }
         Spacer(Modifier.weight(1f))
-        TextButton(onClick = onManage) { Text("管理互斥组") }
+        TextButton(onClick = onManage, enabled = enabled) { Text("管理互斥组") }
     }
 }
 
@@ -50,12 +50,12 @@ internal fun LorebookExclusiveGroupHeader(
     }) {
         LorebookGroupSection(group, entries, onSettings, onAdd,
             canAddEntry = allowEdit, canEditGroup = allowEdit && entries.isNotEmpty(), groupIndex = index,
-            expanded = expanded, onExpandedChange = onExpandedChange,
+            expanded = expanded, onExpandedChange = onExpandedChange, exclusive = true,
             headerGesture = if (!allowEdit) null else lorebookInsertionHandle(insertion, true, true, feedback,
                 onConfirm = { _, placement -> onMove(placement) }, onTap = onExpandedChange,
                 source = LorebookDragSource.GROUP, groupName = key,
                 origin = { coordinates?.takeIf { it.isAttached }?.let { Rect(it.localToRoot(Offset.Zero), Size(it.size.width.toFloat(), it.size.height.toFloat())) } })
-                .semantics { contentDescription = "拖动分组 $group" })
+                .semantics(mergeDescendants = true) { contentDescription = "拖动分组 $group" })
         val placement = feedback().placement
         if (placement?.categoryTarget == false && (placement.group == group || placement.group == key))
             HorizontalDivider(Modifier.align(Alignment.BottomCenter), thickness = 3.dp, color = MaterialTheme.colorScheme.primary)
