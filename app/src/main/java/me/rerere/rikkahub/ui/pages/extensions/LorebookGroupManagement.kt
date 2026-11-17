@@ -12,18 +12,20 @@ import androidx.compose.ui.unit.dp
 import me.rerere.rikkahub.data.model.Lorebook
 
 @Composable
-internal fun LorebookGroupTargetSelector(groups: List<String>, selected: String, enabled: Boolean, prefix: String = "范围", tag: String = "lorebook-target-group", onSelect: (String) -> Unit) {
+internal fun LorebookGroupTargetSelector(groups: List<String>, selected: String, enabled: Boolean, prefix: String = "范围", tag: String = "lorebook-target-group", allSelected: Boolean = false, onSelectAll: (() -> Unit)? = null, onSelect: (String) -> Unit) {
     var expanded by remember { mutableStateOf(false) }
     Box {
         CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides 32.dp) {
             TextButton(onClick = { expanded = true }, enabled = enabled,
-                modifier = Modifier.height(32.dp).widthIn(max = 112.dp).testTag(tag),
+                modifier = Modifier.height(32.dp).widthIn(max = if (onSelectAll != null) 160.dp else 112.dp).testTag(tag),
                 contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp)) {
-                Text("$prefix：${groupLabel(selected)}", maxLines = 1, overflow = TextOverflow.Ellipsis,
+                Text("$prefix：${if (allSelected) "全部条目" else groupLabel(selected)}", maxLines = 1, overflow = TextOverflow.Ellipsis,
                     style = MaterialTheme.typography.labelSmall)
             }
         }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            if (onSelectAll != null) DropdownMenuItem(text = { Text("全部条目") },
+                onClick = { expanded = false; onSelectAll() })
             (groups + selected + "").map { it.ifBlank { "" } }.distinct().forEach { group ->
                 DropdownMenuItem(text = { Text("组内：${groupLabel(group)}") },
                     onClick = { expanded = false; onSelect(group) })
