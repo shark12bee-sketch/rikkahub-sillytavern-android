@@ -80,10 +80,11 @@ class LorebookEntryFinishUiTest {
         var applied: LorebookSettingsPatch? = null
         var show by mutableStateOf(true)
         compose.setContent { MaterialTheme { if (show) LorebookBulkSettingsDialog(listOf(a, b), { show = false }, { applied = it }) } }
-        compose.onNodeWithText("应用设置").assertIsNotEnabled()
-        compose.onAllNodes(isToggleable()).onFirst().performClick()
+        compose.onNodeWithText("应用到 2 个条目").assertIsNotEnabled()
+        compose.onNodeWithTag("bulk-select-PRIORITY").performClick()
+        compose.onNodeWithTag("bulk-edit-PRIORITY").performClick()
         compose.onNodeWithTag("bulk-priority").performTextReplacement("90")
-        compose.onNodeWithText("应用设置").performClick()
+        compose.onNodeWithText("应用到 2 个条目").performClick()
         compose.runOnIdle { assertEquals(LorebookSettingsPatch(priority = 90), applied) }
         captureLorebookRepairEvidence("finish-bulk-settings", compose.onNode(isDialog()).captureToImage().asAndroidBitmap())
         compose.onNodeWithText("取消设置").performClick()

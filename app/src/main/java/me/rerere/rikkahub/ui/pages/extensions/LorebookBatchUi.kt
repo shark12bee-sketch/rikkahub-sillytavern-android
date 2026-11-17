@@ -140,6 +140,7 @@ internal fun LorebookSelectionControls(
     val inGroup = lorebookScopeIds(entries, selectionGroup)
     var destination by remember { mutableStateOf("") }
     Column {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Text("${mode.label} · 已选 ${actual.size} 条", style = MaterialTheme.typography.labelLarge)
         if (mode == LorebookBatchMode.COPY) {
             var showHelp by remember { mutableStateOf(false) }
@@ -149,6 +150,7 @@ internal fun LorebookSelectionControls(
                     Text("完成后返回世界书列表。来源书不会修改，来源草稿的未保存修改不会写入。")
                 }
             }
+        }
         }
         LorebookGroupTargetSelector(groups + entries.map { it.group }, selectionGroup.orEmpty(), enabled,
             prefix = "全选范围", tag = "lorebook-selection-scope", allSelected = selectionGroup == null,
