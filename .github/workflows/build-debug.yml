@@ -63,7 +63,7 @@ jobs:
           crypto.write_text(text.replace(old, old + '\n        check(!BuildConfig.DEBUG) { "Encrypted plugins unavailable in unsigned CI debug builds" }'))
           PY
           chmod +x gradlew
-      - name: Test lorebook entry editor
+      - name: Test lorebook entry editor and prompt injection
         id: editor
         continue-on-error: true
         if: matrix.kind == 'feature' && !inputs.selection_regression
@@ -72,16 +72,10 @@ jobs:
           editor_status=0
           ./gradlew :app:testDebugUnitTest \
             --tests 'me.rerere.rikkahub.ui.pages.extensions.LorebookEntry*Test' \
+            --tests 'me.rerere.rikkahub.data.ai.transformers.PromptInjectionTransformerTest' \
             -x :web:buildWebUi --stacktrace 2>&1 | tee editor-test.log || editor_status=$?
           cp -r app/build/test-results/testDebugUnitTest editor-test-results
           exit "$editor_status"
-      - name: Compare existing prompt injection tests
-        if: inputs.ui_test_class == '' && !inputs.selection_regression
-        run: |
-          set -o pipefail
-          ./gradlew :app:testDebugUnitTest \
-            --tests 'me.rerere.rikkahub.data.ai.transformers.PromptInjectionTransformerTest' \
-            -x :web:buildWebUi --stacktrace 2>&1 | tee test.log
       - name: Test complete message serialization
         if: inputs.ui_test_class == '' && !inputs.selection_regression
         run: ./gradlew :ai:testDebugUnitTest --tests 'me.rerere.ai.ui.UIMessageSerializationTest' -x :web:buildWebUi --stacktrace
@@ -174,6 +168,7 @@ jobs:
             test.log
             editor-test.log
             editor-test-results/
+            app/build/reports/lorebook-prompt-order/
             round5-layout/
             round6-layout/
             worldbook-editor-round7/

@@ -36,7 +36,7 @@ class LorebookEntryUnifiedOrderTest {
         assertEquals(8, book.entries.count { output.contains(it.content) })
         assertEquals(1, book.entries.take(6).count { output.contains(it.content) })
     }
-    @Test fun mixedRootOrderPersistsWithoutOverridingPromptRules() {
+    @Test fun mixedRootOrderPersistsAndControlsOrdinaryPromptOutput() {
         val book = fixture(); val singles = book.entries.drop(7)
         val order = listOf(LorebookOrderNode(entryId = singles[0].id), LorebookOrderNode(categoryId = book.categories[0].id),
             LorebookOrderNode(entryId = singles[1].id), LorebookOrderNode(categoryId = book.categories[2].id),
@@ -44,7 +44,9 @@ class LorebookEntryUnifiedOrderTest {
         val mixed = book.copy(rootOrder = order)
         val reopened = JsonInstant.decodeFromString<Lorebook>(JsonInstant.encodeToString(mixed))
         assertEquals(order, reopened.orderedNodes())
-        assertEquals(text(book), text(reopened)) // Organization is not an injection-order override.
+        val output = text(reopened)
+        val offsets = reopened.orderedOrdinaryEntries().map { output.indexOf(it.content) }
+        assertEquals(offsets.sorted(), offsets)
     }
     @Test fun wholeCategoryMovesBetweenSinglesWithoutChangingChildren() {
         val book = fixture(); val target = book.entries.last()
@@ -90,19 +92,20 @@ class LorebookEntryUnifiedOrderTest {
         val reopened = JsonInstant.decodeFromString<List<UIMessage>>(json)
         assertEquals(result.map { it.role to it.parts }, reopened.map { it.role to it.parts })
         val output = reopened.flatMap { it.parts }.filterIsInstance<UIMessagePart.Text>().joinToString("\n") { it.text }
-        val offsets = book.entries.map { entry ->
+        val offsets = book.orderedOrdinaryEntries().map { entry ->
             assertEquals(1, Regex(Regex.escape(entry.content)).findAll(json).count())
             output.indexOf(entry.content)
         }
         assertEquals(offsets.sorted(), offsets)
     }
-    @Test fun movingCategoryDoesNotReorderPromptOrStorage() {
+    @Test fun movingCategoryReordersPromptWithoutRewritingStorage() {
         val book = fixture()
         val moved = moveLorebookCategory(book, book.categories[0].id, LorebookEntryPlacement(book.entries.last().id, true, "", categoryTarget = true))
         val reopened = JsonInstant.decodeFromString<Lorebook>(JsonInstant.encodeToString(moved))
         val output = text(reopened)
         assertEquals(book.entries, reopened.entries)
-        assertEquals(text(book), output)
+        val offsets = reopened.orderedOrdinaryEntries().map { output.indexOf(it.content) }
+        assertEquals(offsets.sorted(), offsets)
     }
     @Test fun crossBookCopyAssignsOnlyTargetCategoryAndFreshEntryIdentity() {
         val source = fixture(); val category = LorebookCategory(name = "Target")
