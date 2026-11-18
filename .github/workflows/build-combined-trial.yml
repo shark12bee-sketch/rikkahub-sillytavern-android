@@ -1,0 +1,105 @@
+name: Build worldbook and custom thought APK
+on:
+  push:
+    branches: [ci/lorebook-custom-thought-apk]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          ref: ${{ github.sha }}
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: ./.github/actions/setup-android-native
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-read-only: false
+      - name: Prepare unsigned debug-only verification
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          build = Path('app/build.gradle.kts')
+          text = build.read_text()
+          old = 'check(kdfFactor == HD_GUARD_EXPECTED_FACTOR)'
+          assert text.count(old) == 1
+          build.write_text(text.replace(old, 'check(signSecret.isEmpty() || kdfFactor == HD_GUARD_EXPECTED_FACTOR)'))
+          crypto = Path('app/src/main/java/me/rerere/rikkahub/plugin/crypto/PluginCrypto.kt')
+          text = crypto.read_text()
+          old = 'private fun deriveKey(context: Context): SecretKey {'
+          assert text.count(old) == 1
+          crypto.write_text(text.replace(old, old + '\n        check(!BuildConfig.DEBUG) { "Encrypted plugins unavailable in unsigned CI debug builds" }'))
+          PY
+          chmod +x gradlew
+      - name: Test combined worldbook and custom thought code
+        run: |
+          ./gradlew :app:testDebugUnitTest \
+            --tests 'me.rerere.rikkahub.ui.pages.extensions.LorebookEntry*Test' \
+            --tests 'me.rerere.rikkahub.data.ai.transformers.PromptInjectionTransformerTest' \
+            --tests 'me.rerere.rikkahub.data.ai.CustomThoughtTest' \
+            --tests 'me.rerere.rikkahub.data.ai.transformers.ThinkTagTransformerTest' \
+            --tests 'me.rerere.rikkahub.data.datastore.SettingsFieldsTest' \
+            --tests 'me.rerere.rikkahub.data.datastore.HuaDengSettingsCompatTest' \
+            -x :web:buildWebUi --stacktrace
+          ./gradlew :ai:testDebugUnitTest --tests 'me.rerere.ai.ui.UIMessageSerializationTest' -x :web:buildWebUi --stacktrace
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Test worldbook and custom thought UI together
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          arch: x86_64
+          target: google_apis
+          profile: pixel_2
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          script: bash .github/scripts/run-combined-ui-tests.sh
+      - name: Verify all 296 relevant tests executed
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import xml.etree.ElementTree as ET
+          paths = [Path('app/build/test-results/testDebugUnitTest'), Path('ai/build/test-results/testDebugUnitTest'), Path('combined-ui-results')]
+          cases = {(c.get('classname'), c.get('name')): c for root in paths for p in root.rglob('TEST-*.xml') for c in ET.parse(p).getroot().iter('testcase')}
+          assert len(cases) == 296, len(cases)
+          assert all(c.find(tag) is None for c in cases.values() for tag in ['failure', 'error', 'skipped'])
+          assert sum(k[0].endswith('.CustomThoughtUiTest') for k in cases) == 4
+          print('296 unique tests passed, no failures or skips')
+          PY
+      - name: Build trial APK
+        run: |
+          ./gradlew :app:assembleDebug -x :web:buildWebUi --stacktrace
+          mkdir -p trial-apk
+          cp app/build/outputs/apk/debug/app-debug.apk trial-apk/huadeng-3.3.0-worldbook-custom-thought-debug.apk
+          sha256sum trial-apk/*.apk > trial-apk/SHA256SUMS.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: worldbook-custom-thought-test-results
+          path: |
+            app/build/test-results/testDebugUnitTest/
+            ai/build/test-results/testDebugUnitTest/
+            combined-ui-results/
+            app/build/reports/lorebook-prompt-order/
+            round5-layout/
+            round6-layout/
+            worldbook-editor-round7/
+            worldbook-editor-round8/
+      - uses: actions/upload-artifact@v4
+        if: success()
+        with:
+          name: huadeng-worldbook-custom-thought-debug
+          path: trial-apk/
+          if-no-files-found: error
