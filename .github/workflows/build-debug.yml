@@ -1,0 +1,184 @@
+name: Build Debug APK
+
+on:
+  workflow_dispatch:
+    inputs:
+      ui_test_class:
+        description: 'Optional class#method for focused UI evidence; empty runs full regression'
+        type: string
+        default: ''
+      tests_only:
+        description: 'Skip standalone debug APK build and APK artifact upload'
+        type: boolean
+        default: false
+      selection_regression:
+        description: 'Run real-sheet selection integration only (units already verified)'
+        type: boolean
+        default: false
+  push:
+    branches: [ci/lorebook-editor-pr]
+
+permissions:
+  contents: read
+
+jobs:
+  build-debug:
+    runs-on: ubuntu-latest
+    env:
+      UI_TEST_CLASS: ${{ inputs.ui_test_class }}
+      SELECTION_REGRESSION: ${{ inputs.selection_regression }}
+    strategy:
+      fail-fast: false
+      matrix:
+        kind: [feature]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          ref: ${{ github.sha }}
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: ./.github/actions/setup-android-native
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-read-only: false
+      - name: Prepare unsigned debug-only verification
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          build = Path('app/build.gradle.kts')
+          text = build.read_text()
+          old = 'check(kdfFactor == HD_GUARD_EXPECTED_FACTOR)'
+          assert text.count(old) == 1
+          build.write_text(text.replace(old, 'check(signSecret.isEmpty() || kdfFactor == HD_GUARD_EXPECTED_FACTOR)'))
+          crypto = Path('app/src/main/java/me/rerere/rikkahub/plugin/crypto/PluginCrypto.kt')
+          text = crypto.read_text()
+          old = 'private fun deriveKey(context: Context): SecretKey {'
+          assert text.count(old) == 1
+          crypto.write_text(text.replace(old, old + '\n        check(!BuildConfig.DEBUG) { "Encrypted plugins unavailable in unsigned CI debug builds" }'))
+          PY
+          chmod +x gradlew
+      - name: Test lorebook entry editor and prompt injection
+        id: editor
+        continue-on-error: true
+        if: matrix.kind == 'feature' && !inputs.selection_regression
+        run: |
+          set -o pipefail
+          editor_status=0
+          ./gradlew :app:testDebugUnitTest \
+            --tests 'me.rerere.rikkahub.ui.pages.extensions.LorebookEntry*Test' \
+            --tests 'me.rerere.rikkahub.data.ai.transformers.PromptInjectionTransformerTest' \
+            -x :web:buildWebUi --stacktrace 2>&1 | tee editor-test.log || editor_status=$?
+          cp -r app/build/test-results/testDebugUnitTest editor-test-results
+          exit "$editor_status"
+      - name: Test complete message serialization
+        if: inputs.ui_test_class == '' && !inputs.selection_regression
+        run: ./gradlew :ai:testDebugUnitTest --tests 'me.rerere.ai.ui.UIMessageSerializationTest' -x :web:buildWebUi --stacktrace
+      - name: Build debug APK
+        if: matrix.kind == 'feature' && !inputs.tests_only
+        run: ./gradlew assembleDebug -x :web:buildWebUi --stacktrace
+      - name: Enable KVM for Compose gesture verification
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Test safety layout and real pointer gestures
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          arch: x86_64
+          target: google_apis
+          profile: pixel_2
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          script: bash .github/scripts/run-lorebook-ui-tests.sh
+      - name: Verify all editor UI test classes executed
+        if: inputs.ui_test_class == '' && !inputs.selection_regression
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import xml.etree.ElementTree as ET
+          cases = [case for file in Path('app/build/outputs/androidTest-results').rglob('TEST-*.xml')
+                   for case in ET.parse(file).getroot().iter('testcase')]
+          expected = {'LorebookEntryLayoutTest': 6, 'LorebookEntryBatchUiTest': 3, 'LorebookEntryCopyUiTest': 2, 'LorebookEntryRailGestureTest': 3, 'LorebookEntryThumbnailUiTest': 6, 'LorebookEntryHelpUiTest': 2, 'LorebookEntryGroupsUiTest': 6, 'LorebookEntryRepairUiTest': 6, 'LorebookEntrySelectionUiTest': 3, 'LorebookEntryFinishUiTest': 5, 'LorebookEntryAllScopeUiTest': 5, 'LorebookEntrySharedSettingsUiTest': 6, 'LorebookEntryUnifiedOrderUiTest': 3, 'LorebookEntrySingleViewUiTest': 8, 'LorebookEntryCategoryManagementUiTest': 3}
+          for name, count in expected.items():
+              executed = [case for case in cases if case.attrib.get('classname', '').endswith('.' + name)]
+              assert len(executed) == count, (name, len(executed), count)
+              assert all(case.find('skipped') is None for case in executed), name
+              print(name, len(executed), 'executed')
+          PY
+      - name: Verify selection regression executed
+        if: inputs.selection_regression && inputs.ui_test_class == ''
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import xml.etree.ElementTree as ET
+          cases = [c for p in Path('app/build/outputs/androidTest-results').rglob('TEST-*.xml')
+                   for c in ET.parse(p).getroot().iter('testcase')]
+          expected = {
+              'LorebookEntryRepairUiTest': 2,
+              'LorebookEntryBatchUiTest': 1, 'LorebookEntryGroupsUiTest': 1,
+          }
+          assert len(cases) == 4, len(cases)
+          for name, count in expected.items():
+              found = [c for c in cases if c.get('classname', '').endswith('.' + name)]
+              assert len(found) == count, (name, len(found))
+              assert all(c.find(t) is None for c in found for t in ['failure', 'error', 'skipped'])
+              print(name, count, 'passed')
+          PY
+      - name: Verify focused UI evidence test executed
+        if: inputs.ui_test_class != ''
+        run: |
+          python - <<'PY'
+          import os
+          from pathlib import Path
+          import xml.etree.ElementTree as ET
+          import re
+          selectors = os.environ['UI_TEST_CLASS'].split(',')
+          cases = [case for path in Path('focused-ui-results').rglob('TEST-*.xml')
+                   for case in ET.parse(path).getroot().iter('testcase')]
+          expected_total = 0
+          for selector in selectors:
+              selected_class, separator, selected_method = selector.partition('#')
+              source = Path('app/src/androidTest/java') / (selected_class.replace('.', '/') + '.kt')
+              expected = 1 if separator else len(re.findall(r'@Test\s+fun\s+', source.read_text()))
+              found = [c for c in cases if c.get('classname') == selected_class and (not separator or c.get('name') == selected_method)]
+              assert expected > 0 and len(found) == expected, (selector, len(found), expected)
+              assert all(c.find(tag) is None for c in found for tag in ['failure', 'error', 'skipped']), selector
+              expected_total += expected
+              print(selector, expected, 'passed')
+          assert len(cases) == expected_total, (len(cases), expected_total)
+          PY
+      - name: Require editor unit tests to pass
+        if: always() && !inputs.selection_regression
+        run: test '${{ steps.editor.outcome }}' = success
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: lorebook-entry-editor-test-results-${{ matrix.kind }}
+          path: |
+            ai/build/test-results/testDebugUnitTest/
+            app/build/test-results/testDebugUnitTest/
+            app/build/reports/tests/testDebugUnitTest/
+            test.log
+            editor-test.log
+            editor-test-results/
+            app/build/reports/lorebook-prompt-order/
+            round5-layout/
+            round6-layout/
+            worldbook-editor-round7/
+            worldbook-editor-round8/
+            app/build/outputs/androidTest-results/
+            app/build/reports/androidTests/
+            focused-ui-results/
+      - uses: actions/upload-artifact@v4
+        if: matrix.kind == 'feature' && success() && !inputs.tests_only
+        with:
+          name: lorebook-entry-editor-debug
+          path: app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
